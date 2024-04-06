@@ -16,18 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.segment.local.upsert.merger;
 
-public class MaxMerger implements PartialUpsertMerger {
+package org.apache.pinot.core.query.aggregation.function;
 
-  MaxMerger() {
-  }
-
-  /**
-   * Keep the maximal value for the given field.
-   */
+public class PercentileAggregationFunctionTest extends AbstractPercentileAggregationFunctionTest {
   @Override
-  public Object merge(Object previousValue, Object currentValue) {
-    return ((Comparable) previousValue).compareTo((Comparable) currentValue) > 0 ? previousValue : currentValue;
+  public String callStr(String column, int percent) {
+    return "PERCENTILE(" + column + ", " + percent + ")";
   }
 }

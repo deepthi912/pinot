@@ -155,26 +155,19 @@ public final class TableConfigUtils {
     if (!skipTypes.contains(ValidationType.ALL)) {
       validateTableSchemaConfig(tableConfig);
       validateValidationConfig(tableConfig, schema);
-
-      StreamConfig streamConfig = null;
       validateIngestionConfig(tableConfig, schema, disableGroovy);
+
       // Only allow realtime tables with non-null stream.type and LLC consumer.type
       if (tableConfig.getTableType() == TableType.REALTIME) {
         Map<String, String> streamConfigMap = IngestionConfigUtils.getStreamConfigMap(tableConfig);
+        StreamConfig streamConfig;
         try {
           // Validate that StreamConfig can be created
           streamConfig = new StreamConfig(tableConfig.getTableName(), streamConfigMap);
         } catch (Exception e) {
           throw new IllegalStateException("Could not create StreamConfig using the streamConfig map", e);
         }
-        validateDecoder(streamConfig);
-        // if segmentSizeBytes is specified, rows must be zero.
-        if (streamConfigMap.containsKey(StreamConfigProperties.SEGMENT_FLUSH_THRESHOLD_SEGMENT_SIZE)
-            || streamConfigMap.containsKey(StreamConfigProperties.DEPRECATED_SEGMENT_FLUSH_DESIRED_SIZE)) {
-          Preconditions.checkState(streamConfig.getFlushThresholdRows() == 0,
-              String.format("Invalid config: %s=%d, it must be set to 0 for size based segment threshold to work.",
-                  StreamConfigProperties.SEGMENT_FLUSH_THRESHOLD_ROWS, streamConfig.getFlushThresholdRows()));
-        }
+        validateStreamConfig(streamConfig);
       }
       validateTierConfigList(tableConfig.getTierConfigsList());
       validateIndexingConfig(tableConfig.getIndexingConfig(), schema);
@@ -590,7 +583,28 @@ public final class TableConfigUtils {
   }
 
   @VisibleForTesting
-  static void validateDecoder(StreamConfig streamConfig) {
+  static void validateStreamConfig(StreamConfig streamConfig) {
+    // Validate flush threshold
+    Preconditions.checkState(streamConfig.getFlushThresholdTimeMillis() > 0, "Invalid flush threshold time: %s",
+        streamConfig.getFlushThresholdTimeMillis());
+    int flushThresholdRows = streamConfig.getFlushThresholdRows();
+    int flushThresholdSegmentRows = streamConfig.getFlushThresholdSegmentRows();
+    long flushThresholdSegmentSizeBytes = streamConfig.getFlushThresholdSegmentSizeBytes();
+    int numFlushThresholdSet = 0;
+    if (flushThresholdRows > 0) {
+      numFlushThresholdSet++;
+    }
+    if (flushThresholdSegmentRows > 0) {
+      numFlushThresholdSet++;
+    }
+    if (flushThresholdSegmentSizeBytes > 0) {
+      numFlushThresholdSet++;
+    }
+    Preconditions.checkState(numFlushThresholdSet <= 1,
+        "Only 1 of flush threshold (rows: %s, segment rows: %s, segment size: %s) can be set", flushThresholdRows,
+        flushThresholdSegmentRows, flushThresholdSegmentSizeBytes);
+
+    // Validate decoder
     if (streamConfig.getDecoderClass().equals("org.apache.pinot.plugin.inputformat.protobuf.ProtoBufMessageDecoder")) {
       String descriptorFilePath = "descriptorFile";
       String protoClassName = "protoClassName";
@@ -918,32 +932,41 @@ public final class TableConfigUtils {
     UpsertConfig upsertConfig = tableConfig.getUpsertConfig();
     assert upsertConfig != null;
     Map<String, UpsertConfig.Strategy> partialUpsertStrategies = upsertConfig.getPartialUpsertStrategies();
+    String partialUpsertMergerClass = upsertConfig.getPartialUpsertMergerClass();
 
-    List<String> primaryKeyColumns = schema.getPrimaryKeyColumns();
-    for (Map.Entry<String, UpsertConfig.Strategy> entry : partialUpsertStrategies.entrySet()) {
-      String column = entry.getKey();
-      UpsertConfig.Strategy columnStrategy = entry.getValue();
-      Preconditions.checkState(!primaryKeyColumns.contains(column), "Merger cannot be applied to primary key columns");
+    // check if partialUpsertMergerClass is provided then partialUpsertStrategies should be empty
+    if (StringUtils.isNotBlank(partialUpsertMergerClass)) {
+      Preconditions.checkState(MapUtils.isEmpty(partialUpsertStrategies),
+          "If partialUpsertMergerClass is provided then partialUpsertStrategies should be empty");
+    } else {
+      List<String> primaryKeyColumns = schema.getPrimaryKeyColumns();
+      // validate partial upsert column mergers
+      for (Map.Entry<String, UpsertConfig.Strategy> entry : partialUpsertStrategies.entrySet()) {
+        String column = entry.getKey();
+        UpsertConfig.Strategy columnStrategy = entry.getValue();
+        Preconditions.checkState(!primaryKeyColumns.contains(column),
+            "Merger cannot be applied to primary key columns");
 
-      if (upsertConfig.getComparisonColumns() != null) {
-        Preconditions.checkState(!upsertConfig.getComparisonColumns().contains(column),
-            "Merger cannot be applied to comparison column");
-      } else {
-        Preconditions.checkState(!tableConfig.getValidationConfig().getTimeColumnName().equals(column),
-            "Merger cannot be applied to time column");
-      }
+        if (upsertConfig.getComparisonColumns() != null) {
+          Preconditions.checkState(!upsertConfig.getComparisonColumns().contains(column),
+              "Merger cannot be applied to comparison column");
+        } else {
+          Preconditions.checkState(!tableConfig.getValidationConfig().getTimeColumnName().equals(column),
+              "Merger cannot be applied to time column");
+        }
 
-      FieldSpec fieldSpec = schema.getFieldSpecFor(column);
-      Preconditions.checkState(fieldSpec != null, "Merger cannot be applied to non-existing column: %s", column);
+        FieldSpec fieldSpec = schema.getFieldSpecFor(column);
+        Preconditions.checkState(fieldSpec != null, "Merger cannot be applied to non-existing column: %s", column);
 
-      if (columnStrategy == UpsertConfig.Strategy.INCREMENT) {
-        Preconditions.checkState(fieldSpec.getDataType().getStoredType().isNumeric(),
-            "INCREMENT merger cannot be applied to non-numeric column: %s", column);
-        Preconditions.checkState(!schema.getDateTimeNames().contains(column),
-            "INCREMENT merger cannot be applied to date time column: %s", column);
-      } else if (columnStrategy == UpsertConfig.Strategy.APPEND || columnStrategy == UpsertConfig.Strategy.UNION) {
-        Preconditions.checkState(!fieldSpec.isSingleValueField(),
-            "%s merger cannot be applied to single-value column: %s", columnStrategy.toString(), column);
+        if (columnStrategy == UpsertConfig.Strategy.INCREMENT) {
+          Preconditions.checkState(fieldSpec.getDataType().getStoredType().isNumeric(),
+              "INCREMENT merger cannot be applied to non-numeric column: %s", column);
+          Preconditions.checkState(!schema.getDateTimeNames().contains(column),
+              "INCREMENT merger cannot be applied to date time column: %s", column);
+        } else if (columnStrategy == UpsertConfig.Strategy.APPEND || columnStrategy == UpsertConfig.Strategy.UNION) {
+          Preconditions.checkState(!fieldSpec.isSingleValueField(),
+              "%s merger cannot be applied to single-value column: %s", columnStrategy.toString(), column);
+        }
       }
     }
   }
