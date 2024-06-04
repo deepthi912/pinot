@@ -385,7 +385,7 @@ public abstract class BasePartitionUpsertMetadataManager implements PartitionUps
         if (validDocIdsSnapshot != null) {
           MutableRoaringBitmap queryableDocIds = getQueryableDocIds(segment, validDocIdsSnapshot);
           immutableSegment.enableUpsert(this, new ThreadSafeMutableRoaringBitmap(validDocIdsSnapshot),
-              new ThreadSafeMutableRoaringBitmap(queryableDocIds));
+              queryableDocIds != null ? new ThreadSafeMutableRoaringBitmap(queryableDocIds) : null);
         } else {
           _logger.warn("Failed to find snapshot from segment: {} which is out of TTL, treating all documents as valid",
               segmentName);
@@ -847,6 +847,8 @@ public abstract class BasePartitionUpsertMetadataManager implements PartitionUps
       long duration = System.currentTimeMillis() - startTime;
       _serverMetrics.addTimedTableValue(_tableNameWithType, ServerTimer.UPSERT_SNAPSHOT_TIME_MS, duration,
           TimeUnit.MILLISECONDS);
+    } catch (Exception e) {
+      _logger.warn("Caught exception while taking snapshot", e);
     } finally {
       _snapshotLock.writeLock().unlock();
       finishOperation();

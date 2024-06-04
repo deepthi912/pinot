@@ -122,7 +122,7 @@
     <argLine>-Xms4g -Xmx4g</argLine>
     <SKIP_INTEGRATION_TESTS>true</SKIP_INTEGRATION_TESTS>
     <surefire.version>3.2.5</surefire.version>
-    <maven-enforcer-plugin.version>3.4.1</maven-enforcer-plugin.version>
+    <maven-enforcer-plugin.version>3.5.0</maven-enforcer-plugin.version>
 
     <!-- Checkstyle violation prop.-->
     <checkstyle.violation.severity>warning</checkstyle.violation.severity>
@@ -131,7 +131,7 @@
     <!-- Configuration for Packaging -->
     <shade.prefix>org.apache.pinot.shaded</shade.prefix>
     <maven-jar-plugin.version>3.4.1</maven-jar-plugin.version>
-    <maven-shade-plugin.version>3.5.3</maven-shade-plugin.version>
+    <maven-shade-plugin.version>3.6.0</maven-shade-plugin.version>
     <shade.phase.prop>none</shade.phase.prop>
 
     <avro.version>1.11.3</avro.version>
@@ -147,7 +147,7 @@
     <hk2.version>2.6.1</hk2.version>
     <javassist.version>3.30.2-GA</javassist.version>
     <swagger.version>1.6.14</swagger.version>
-    <swagger-ui.version>5.17.0</swagger-ui.version>
+    <swagger-ui.version>5.17.14</swagger-ui.version>
     <hadoop.version>3.3.6</hadoop.version>
     <jsonpath.version>2.9.0</jsonpath.version>
     <jsonsmart.version>2.5.1</jsonsmart.version>
@@ -172,7 +172,7 @@
     <audienceannotations.version>0.15.0</audienceannotations.version>
     <clp-ffi.version>0.4.4</clp-ffi.version>
     <stax2-api.version>4.2.2</stax2-api.version>
-    <aws.sdk.version>2.25.57</aws.sdk.version>
+    <aws.sdk.version>2.25.64</aws.sdk.version>
     <joda-time.version>2.12.7</joda-time.version>
     <janino.version>3.1.12</janino.version>
     <testng.version>7.10.2</testng.version>
@@ -194,8 +194,8 @@
     <commons-io.version>2.16.1</commons-io.version>
     <commons-codec.version>1.17.0</commons-codec.version>
     <commons-cli.version>1.8.0</commons-cli.version>
-    <commons-net.version>3.10.0</commons-net.version>
-    <commons-validator.version>1.8.0</commons-validator.version>
+    <commons-net.version>3.11.0</commons-net.version>
+    <commons-validator.version>1.9.0</commons-validator.version>
     <!-- Legacy Apache Commons Libraries -->
     <commons-lang.version>2.6</commons-lang.version>
     <commons-collections.version>3.2.2</commons-collections.version>
@@ -223,7 +223,7 @@
     <httpcore5.version>5.2.4</httpcore5.version>
 
     <!-- Google Libraries -->
-    <google.cloud.libraries.version>26.39.0</google.cloud.libraries.version>
+    <google.cloud.libraries.version>26.40.0</google.cloud.libraries.version>
     <google.auth.version>1.23.0</google.auth.version>
     <gson.version>2.10.1</gson.version>
     <guava.version>33.1.0-jre</guava.version>
@@ -243,7 +243,7 @@
     <wildfly.version>2.0.0</wildfly.version>
     <jettison.version>1.5.4</jettison.version>
     <eclipse.jetty.version>9.4.54.v20240208</eclipse.jetty.version>
-    <nimbus-jose-jwt.version>9.39.1</nimbus-jose-jwt.version>
+    <nimbus-jose-jwt.version>9.39.3</nimbus-jose-jwt.version>
     <bouncycastle.version>1.78.1</bouncycastle.version>
     <aircompressor.version>0.27</aircompressor.version>
     <jna.version>5.14.0</jna.version>
@@ -843,13 +843,13 @@
       <dependency>
         <groupId>com.google.apis</groupId>
         <artifactId>google-api-services-storage</artifactId>
-        <version>v1-rev20240319-2.0.0</version>
+        <version>v1-rev20240524-2.0.0</version>
       </dependency>
       <!-- Solve the dependency converge issue between guava and calcite-core -->
       <dependency>
         <groupId>com.google.errorprone</groupId>
         <artifactId>error_prone_annotations</artifactId>
-        <version>2.27.1</version>
+        <version>2.28.0</version>
       </dependency>
       <!-- Legacy Google Libraries -->
       <dependency>
@@ -1014,7 +1014,7 @@
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-mapreduce-client-core</artifactId>
         <version>${hadoop.version}</version>
-        <scope>provided</scope>
+        <scope>compile</scope>
         <exclusions>
           <exclusion>
             <groupId>org.codehaus.jackson</groupId>
@@ -1395,7 +1395,7 @@
       <dependency>
         <groupId>net.openhft</groupId>
         <artifactId>posix</artifactId>
-        <version>2.25ea0</version>
+        <version>2.26ea0</version>
       </dependency>
       <dependency>
         <groupId>net.openhft</groupId>
@@ -1646,7 +1646,7 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-javadoc-plugin</artifactId>
-          <version>3.6.3</version>
+          <version>3.7.0</version>
           <configuration>
             <!-- Remove this after fixing all javadoc warnings -->
             <doclint>none</doclint>
@@ -1922,7 +1922,7 @@
           <dependency>
             <groupId>com.puppycrawl.tools</groupId>
             <artifactId>checkstyle</artifactId>
-            <version>10.16.0</version>
+            <version>10.17.0</version>
           </dependency>
         </dependencies>
         <executions>

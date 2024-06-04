@@ -38,9 +38,11 @@ spec:
         {{- include "pinot.brokerLabels" . | nindent 8 }}
       annotations:
         {{- if .Values.broker.automaticReload.enabled }}
-        checksum/config: {{- include (print $.Template.BasePath "/broker/configmap.yaml") . | sha256sum }}
+        checksum/config: {{ include (print $.Template.BasePath "/broker/configmap.yaml") . | sha256sum }}
         {{- end }}
-{{ toYaml .Values.broker.podAnnotations | nindent 8 }}
+        {{- with .Values.broker.podAnnotations }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       serviceAccountName: {{ include "pinot.serviceAccountName" . }}
@@ -116,7 +118,7 @@ spec:
           initialDelaySeconds: {{ .Values.broker.probes.startup.initialDelaySeconds | default .Values.probes.initialDelaySeconds }}
           periodSeconds: {{ .Values.broker.probes.startup.periodSeconds | default .Values.probes.periodSeconds }}
           failureThreshold: {{ .Values.broker.probes.startup.failureThreshold | default .Values.probes.failureThreshold }}
-          successThreshold:{{ .Values.broker.probes.startup.successThreshold | default .Values.probes.successThreshold }}
+          successThreshold: {{ .Values.broker.probes.startup.successThreshold | default .Values.probes.successThreshold }}
           timeoutSeconds: {{ .Values.broker.probes.startup.timeoutSeconds | default .Values.probes.timeoutSeconds }}
           httpGet:
             path: {{ .Values.broker.probes.endpoint }}
