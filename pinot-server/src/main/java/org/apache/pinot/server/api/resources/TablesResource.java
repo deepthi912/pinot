@@ -424,6 +424,7 @@ public class TablesResource {
       throw new WebApplicationException(String.format("Table %s segments %s does not exist", tableName, segmentName),
           Response.Status.NOT_FOUND);
     }
+
     try {
       return SegmentMetadataFetcher.getSegmentMetadata(segmentDataManager, columns);
     } catch (Exception e) {
