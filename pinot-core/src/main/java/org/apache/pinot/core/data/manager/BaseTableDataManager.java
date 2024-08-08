@@ -115,7 +115,6 @@ public abstract class BaseTableDataManager implements TableDataManager {
   protected LoadingCache<Pair<String, String>, SegmentErrorInfo> _errorCache;
   // Cache used for identifying segments which could not be acquired since they were recently deleted.
   protected Cache<String, String> _recentlyDeletedSegments;
-
   protected volatile boolean _shutDown;
 
   @Override
@@ -187,6 +186,7 @@ public abstract class BaseTableDataManager implements TableDataManager {
     doInit();
 
     _logger.info("Initialized table data manager with data directory: {}", _tableDataDir);
+
   }
 
   protected abstract void doInit();

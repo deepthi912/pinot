@@ -58,10 +58,10 @@ public class TableMetadataReader {
   /**
    * This api takes in list of segments for which we need the metadata.
    */
-  public JsonNode getSegmentsMetadata(String tableNameWithType, List<String> columns, Set<String> segmentsToInclude,
+  public JsonNode getServerSegmentReloadCheck(String tableNameWithType, List<String> columns, Set<String> segmentsToInclude,
       int timeoutMs)
       throws InvalidConfigException, IOException {
-    return getSegmentsMetadataInternal(tableNameWithType, columns, segmentsToInclude, timeoutMs);
+    return getSegmentsMetaDataMismatchInternal(tableNameWithType, columns, segmentsToInclude, timeoutMs);
   }
 
   private JsonNode getSegmentsMetadataInternal(String tableNameWithType, List<String> columns,
@@ -89,6 +89,35 @@ public class TableMetadataReader {
     for (String segmentMetadata : segmentsMetadata) {
       JsonNode responseJson = JsonUtils.stringToJsonNode(segmentMetadata);
       response.put(responseJson.get("segmentName").asText(), responseJson);
+    }
+    return JsonUtils.objectToJsonNode(response);
+  }
+
+  private JsonNode getSegmentsMetaDataMismatchInternal(String tableNameWithType, List<String> columns,
+      Set<String> segmentsToInclude, int timeoutMs)
+      throws InvalidConfigException, IOException {
+    final Map<String, List<String>> serverToSegmentsMap =
+        _pinotHelixResourceManager.getServerToSegmentsMap(tableNameWithType);
+    BiMap<String, String> endpoints =
+        _pinotHelixResourceManager.getDataInstanceAdminEndpoints(serverToSegmentsMap.keySet());
+    ServerSegmentMetadataReader serverSegmentMetadataReader =
+        new ServerSegmentMetadataReader(_executor, _connectionManager);
+
+    // Filter segments that we need
+    for (Map.Entry<String, List<String>> serverToSegment : serverToSegmentsMap.entrySet()) {
+      List<String> segments = serverToSegment.getValue();
+      if (segmentsToInclude != null && !segmentsToInclude.isEmpty()) {
+        segments.retainAll(segmentsToInclude);
+      }
+    }
+
+    List<String> segmentsMetadata =
+        serverSegmentMetadataReader.getSegmentMismatchFromServer(tableNameWithType, serverToSegmentsMap, endpoints,
+            columns, timeoutMs);
+    Map<String, JsonNode> response = new HashMap<>();
+    for (String segmentMetadata : segmentsMetadata) {
+      JsonNode responseJson = JsonUtils.stringToJsonNode(segmentMetadata);
+      response.put(responseJson.get("serverInstanceId").asText(), responseJson);
     }
     return JsonUtils.objectToJsonNode(response);
   }

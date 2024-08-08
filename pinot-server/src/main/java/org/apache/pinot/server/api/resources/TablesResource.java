@@ -94,9 +94,11 @@ import org.apache.pinot.segment.spi.index.metadata.SegmentMetadataImpl;
 import org.apache.pinot.server.access.AccessControlFactory;
 import org.apache.pinot.server.api.AdminApiApplication;
 import org.apache.pinot.server.starter.ServerInstance;
+import org.apache.pinot.spi.config.table.TableConfig;
 import org.apache.pinot.spi.config.table.TableType;
 import org.apache.pinot.spi.data.FieldSpec;
 import org.apache.pinot.spi.data.FieldSpec.DataType;
+import org.apache.pinot.spi.data.Schema;
 import org.apache.pinot.spi.stream.ConsumerPartitionState;
 import org.apache.pinot.spi.utils.CommonConstants.Helix.StateModel.SegmentStateModel;
 import org.apache.pinot.spi.utils.JsonUtils;
@@ -169,6 +171,43 @@ public class TablesResource {
         segments.add(segmentDataManager.getSegmentName());
       }
       return ResourceUtils.convertToJsonString(new TableSegments(segments));
+    } finally {
+      for (SegmentDataManager segmentDataManager : segmentDataManagers) {
+        tableDataManager.releaseSegment(segmentDataManager);
+      }
+    }
+  }
+
+  @GET
+  @Path("/tables/{tableName}/segments/mismatch")
+  @Produces(MediaType.APPLICATION_JSON)
+  @ApiOperation(value = "Checks if there is any mismatch of segments", notes = "Returns true if reload is required on"
+      + " segments for a given server")
+  @ApiResponses(value = {
+      @ApiResponse(code = 200, message = "Success", response = TableSegments.class), @ApiResponse(code = 500,
+      message = "Server initialization error", response = ErrorInfo.class)
+  })
+  public String checkMismatchedSegments(
+      @ApiParam(value = "Table Name with type", required = true) @PathParam("tableName") String tableName,
+      @ApiParam(value = "Column name", allowMultiple = true) @QueryParam("columns") @DefaultValue("")
+      List<String> columns, @Context HttpHeaders headers) {
+    tableName = DatabaseUtils.translateTableName(tableName, headers);
+    TableDataManager tableDataManager = ServerResourceUtils.checkGetTableDataManager(_serverInstance, tableName);
+    Pair<TableConfig, Schema> tableConfigSchema = tableDataManager.fetchTableConfigAndSchema();
+    Schema schema = tableConfigSchema.getValue();
+    Set<String> schemaColumns = schema.getPhysicalColumnNames();
+    List<SegmentDataManager> segmentDataManagers = tableDataManager.acquireAllSegments();
+    try {
+      Boolean mismatchCheck = false;
+      for (SegmentDataManager segmentDataManager : segmentDataManagers) {
+        Set<String> segmentColumns = SegmentMetadataFetcher.getSegmentColumns(segmentDataManager, columns);
+        if (!segmentColumns.containsAll(schemaColumns)) {
+          mismatchCheck = true;
+          break;
+        }
+      }
+      return ResourceUtils.convertToJsonString(
+          new SegmentColumnMismatchResponse(mismatchCheck, tableDataManager.getInstanceId()));
     } finally {
       for (SegmentDataManager segmentDataManager : segmentDataManagers) {
         tableDataManager.releaseSegment(segmentDataManager);
@@ -385,7 +424,6 @@ public class TablesResource {
       throw new WebApplicationException(String.format("Table %s segments %s does not exist", tableName, segmentName),
           Response.Status.NOT_FOUND);
     }
-
     try {
       return SegmentMetadataFetcher.getSegmentMetadata(segmentDataManager, columns);
     } catch (Exception e) {

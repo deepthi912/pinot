@@ -177,6 +177,47 @@ public class ServerSegmentMetadataReader {
    * list.
    * @return list of segments and their metadata as a JSON string
    */
+  public List<String> getSegmentMismatchFromServer(String tableNameWithType,
+      Map<String, List<String>> serversToSegmentsMap, BiMap<String, String> endpoints, List<String> columns,
+      int timeoutMs) {
+    LOGGER.debug("Reading segment metadata from servers for table {}.", tableNameWithType);
+    List<String> serverURLs = new ArrayList<>();
+    for (Map.Entry<String, List<String>> serverToSegments : serversToSegmentsMap.entrySet()) {
+      List<String> segments = serverToSegments.getValue();
+      serverURLs.add(generateSegmentMismatchServerURL(tableNameWithType, columns,
+            endpoints.get(serverToSegments.getKey())));
+    }
+    BiMap<String, String> endpointsToServers = endpoints.inverse();
+    CompletionServiceHelper completionServiceHelper =
+        new CompletionServiceHelper(_executor, _connectionManager, endpointsToServers);
+    CompletionServiceHelper.CompletionServiceResponse serviceResponse =
+        completionServiceHelper.doMultiGetRequest(serverURLs, tableNameWithType, true, timeoutMs);
+    List<String> serverSegmentReloadMetadata = new ArrayList<>();
+
+    int failedParses = 0;
+    for (Map.Entry<String, String> streamResponse : serviceResponse._httpResponses.entrySet()) {
+      try {
+        String serverMetadata = streamResponse.getValue();
+        serverSegmentReloadMetadata.add(serverMetadata);
+      } catch (Exception e) {
+        failedParses++;
+        LOGGER.error("Unable to parse server {} response due to an error: ", streamResponse.getKey(), e);
+      }
+    }
+    if (failedParses != 0) {
+      LOGGER.error("Unable to parse server {} / {} response due to an error: ", failedParses, serverURLs.size());
+    }
+
+    LOGGER.debug("Retrieved segment metadata from servers.");
+    return serverSegmentReloadMetadata;
+  }
+
+  /**
+   * This method is called when the API request is to check for segment mismatch of metadata for all segments of the table.
+   * This method makes a MultiGet call to all servers that check their respective segments to get the results.
+   * This method accept a list of column names as filter, and will return if reload is needed for the segments in the server
+   * @return list of segments and their metadata as a JSON string
+   */
   public List<String> getSegmentMetadataFromServer(String tableNameWithType,
       Map<String, List<String>> serversToSegmentsMap, BiMap<String, String> endpoints, List<String> columns,
       int timeoutMs) {
@@ -373,6 +414,13 @@ public class ServerSegmentMetadataReader {
     segmentName = URLEncoder.encode(segmentName, StandardCharsets.UTF_8);
     String paramsStr = generateColumnsParam(columns);
     return String.format("%s/tables/%s/segments/%s/metadata?%s", endpoint, tableNameWithType, segmentName, paramsStr);
+  }
+
+  private String generateSegmentMismatchServerURL(String tableNameWithType, List<String> columns,
+      String endpoint) {
+    tableNameWithType = URLEncoder.encode(tableNameWithType, StandardCharsets.UTF_8);
+    String paramsStr = generateColumnsParam(columns);
+    return String.format("%s/tables/%s/segments/mismatch?%s", endpoint, tableNameWithType, paramsStr);
   }
 
   @Deprecated
