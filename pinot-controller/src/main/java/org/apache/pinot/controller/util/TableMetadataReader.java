@@ -103,19 +103,11 @@ public class TableMetadataReader {
     ServerSegmentMetadataReader serverSegmentMetadataReader =
         new ServerSegmentMetadataReader(_executor, _connectionManager);
 
-    // Filter segments that we need
-    for (Map.Entry<String, List<String>> serverToSegment : serverToSegmentsMap.entrySet()) {
-      List<String> segments = serverToSegment.getValue();
-      if (segmentsToInclude != null && !segmentsToInclude.isEmpty()) {
-        segments.retainAll(segmentsToInclude);
-      }
-    }
-
-    List<String> segmentsMetadata =
+    List<String> serverSegmentsMismatchMetadata =
         serverSegmentMetadataReader.getSegmentMismatchFromServer(tableNameWithType, serverToSegmentsMap, endpoints,
             columns, timeoutMs);
     Map<String, JsonNode> response = new HashMap<>();
-    for (String segmentMetadata : segmentsMetadata) {
+    for (String segmentMetadata : serverSegmentsMismatchMetadata) {
       JsonNode responseJson = JsonUtils.stringToJsonNode(segmentMetadata);
       response.put(responseJson.get("serverInstanceId").asText(), responseJson);
     }

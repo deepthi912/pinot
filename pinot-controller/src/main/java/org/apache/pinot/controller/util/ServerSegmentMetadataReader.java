@@ -171,7 +171,7 @@ public class ServerSegmentMetadataReader {
   }
 
   /**
-   * This method is called when the API request is to fetch segment metadata for all segments of the table.
+   * This method is called when the API request is to fetch aggregated results if there is any segment mismatch in a server
    * This method makes a MultiGet call to all servers that host their respective segments and gets the results.
    * This method accept a list of column names as filter, and will return column metadata for the column in the
    * list.
@@ -180,10 +180,9 @@ public class ServerSegmentMetadataReader {
   public List<String> getSegmentMismatchFromServer(String tableNameWithType,
       Map<String, List<String>> serversToSegmentsMap, BiMap<String, String> endpoints, List<String> columns,
       int timeoutMs) {
-    LOGGER.debug("Reading segment metadata from servers for table {}.", tableNameWithType);
+    LOGGER.debug("Reading segment reload check from servers for a table {}.", tableNameWithType);
     List<String> serverURLs = new ArrayList<>();
     for (Map.Entry<String, List<String>> serverToSegments : serversToSegmentsMap.entrySet()) {
-      List<String> segments = serverToSegments.getValue();
       serverURLs.add(generateSegmentMismatchServerURL(tableNameWithType, columns,
             endpoints.get(serverToSegments.getKey())));
     }
