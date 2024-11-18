@@ -18,16 +18,22 @@
  */
 package org.apache.pinot.segment.local.segment.creator;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import javax.annotation.Nullable;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.pinot.segment.local.recordtransformer.ComplexTypeTransformer;
 import org.apache.pinot.segment.local.recordtransformer.CompositeTransformer;
+import org.apache.pinot.segment.local.recordtransformer.RecordEnricherTransformer;
 import org.apache.pinot.segment.local.recordtransformer.RecordTransformer;
 import org.apache.pinot.segment.local.utils.IngestionUtils;
 import org.apache.pinot.spi.config.table.TableConfig;
+import org.apache.pinot.spi.config.table.ingestion.IngestionConfig;
+import org.apache.pinot.spi.config.table.ingestion.TransformConfig;
 import org.apache.pinot.spi.data.Schema;
 import org.apache.pinot.spi.data.readers.GenericRow;
 
@@ -37,8 +43,10 @@ import org.apache.pinot.spi.data.readers.GenericRow;
  * It is used mainly but not limited by RealTimeDataManager for each row that is going to be indexed into Pinot.
  */
 public class TransformPipeline {
-  private final RecordTransformer _recordTransformer;
-  private final ComplexTypeTransformer _complexTypeTransformer;
+  private RecordTransformer _recordTransformer;
+  private ComplexTypeTransformer _complexTypeTransformer;
+  private final List<RecordTransformer> _enrichers = new ArrayList<>();
+  private final Set<String> _columnsToExtract = new HashSet<>();
 
   /**
    * Constructs a transform pipeline with customized RecordTransformer and customized ComplexTypeTransformer
@@ -64,11 +72,36 @@ public class TransformPipeline {
     _complexTypeTransformer = ComplexTypeTransformer.getComplexTypeTransformer(tableConfig);
   }
 
+  public TransformPipeline() {
+    new TransformPipeline();
+  }
+
   /**
    * Returns a pass through pipeline that does not transform the record.
    */
   public static TransformPipeline getPassThroughPipeline() {
     return new TransformPipeline(CompositeTransformer.getPassThroughTransformer(), null);
+  }
+
+  public static TransformPipeline fromIngestionConfig(IngestionConfig ingestionConfig) {
+    TransformPipeline pipeline = new TransformPipeline();
+    if (null == ingestionConfig || null == ingestionConfig.getEnrichmentConfigs()) {
+      return pipeline;
+    }
+    List<TransformConfig> enrichmentConfigs = ingestionConfig.getEnrichmentConfigs();
+    for (TransformConfig enrichmentConfig : enrichmentConfigs) {
+      try {
+        RecordTransformer enricher = RecordEnricherTransformer.createRecordEnricher(enrichmentConfig);
+        pipeline.add(enricher);
+      } catch (IOException e) {
+        throw new RuntimeException("Failed to instantiate record enricher " + enrichmentConfig.getEnricherType(), e);
+      }
+    }
+    return pipeline;
+  }
+
+  public static TransformPipeline fromTableConfig(TableConfig tableConfig) {
+    return fromIngestionConfig(tableConfig.getIngestionConfig());
   }
 
   /**
@@ -110,6 +143,21 @@ public class TransformPipeline {
     } else {
       reusedResult.incSkippedRowCount();
     }
+  }
+
+  public void add(RecordTransformer enricher) {
+    _enrichers.add(enricher);
+    _columnsToExtract.addAll(enricher.getInputColumns());
+  }
+
+  public void run(GenericRow record) {
+    for (RecordTransformer enricher : _enrichers) {
+      enricher.transform(record);
+    }
+  }
+
+  public Set<String> getColumnsToExtract() {
+    return _columnsToExtract;
   }
 
   /**

@@ -123,7 +123,7 @@ public class MultiStageEngineIntegrationTest extends BaseClusterIntegrationTestS
     noDicCols.add(customCol);
     tableConfig.getIndexingConfig().setNoDictionaryColumns(noDicCols);
     IngestionConfig ingestionConfig = new IngestionConfig();
-    ingestionConfig.setTransformConfigs(List.of(new TransformConfig(customCol, defaultCol)));
+    ingestionConfig.setTransformConfigs(List.of(new TransformConfig(customCol, defaultCol, null, null)));
     tableConfig.setIngestionConfig(ingestionConfig);
     addTableConfig(tableConfig);
 

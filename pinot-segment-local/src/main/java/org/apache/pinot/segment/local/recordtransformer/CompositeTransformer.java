@@ -20,7 +20,9 @@ package org.apache.pinot.segment.local.recordtransformer;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
@@ -35,6 +37,7 @@ import org.apache.pinot.spi.data.readers.GenericRow;
  */
 public class CompositeTransformer implements RecordTransformer {
   private final List<RecordTransformer> _transformers;
+  private final Set<String> _columnsToExtract = new HashSet<>();
 
   /**
    * Returns a record transformer that performs null value handling, time/expression/data-type transformation and record
@@ -117,6 +120,9 @@ public class CompositeTransformer implements RecordTransformer {
 
   public CompositeTransformer(List<RecordTransformer> transformers) {
     _transformers = transformers;
+    for (RecordTransformer recordTransformer : transformers) {
+      _columnsToExtract.addAll(recordTransformer.getInputColumns());
+    }
   }
 
   @Nullable

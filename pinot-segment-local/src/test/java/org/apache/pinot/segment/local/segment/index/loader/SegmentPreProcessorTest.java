@@ -972,14 +972,14 @@ public class SegmentPreProcessorTest {
     _noDictionaryColumns.add(NEW_RAW_STRING_SV_DIMENSION_COLUMN_NAME);
     _invertedIndexColumns.add(NEW_COLUMN_INVERTED_INDEX);
     _ingestionConfig.setTransformConfigs(
-        List.of(new TransformConfig(NEW_INT_SV_DIMENSION_COLUMN_NAME, "plus(column1, 1)"),
-            new TransformConfig(NEW_RAW_STRING_SV_DIMENSION_COLUMN_NAME, "reverse(column3)"),
+        List.of(new TransformConfig(NEW_INT_SV_DIMENSION_COLUMN_NAME, "plus(column1, 1)", null, null),
+            new TransformConfig(NEW_RAW_STRING_SV_DIMENSION_COLUMN_NAME, "reverse(column3)", null, null),
             // Ensure that null values returned by transform functions for derived columns are handled appropriately
             // during segment reload
             new TransformConfig(NEW_NULL_RETURN_STRING_SV_DIMENSION_COLUMN_NAME,
-                "json_path_string(column21, 'non-existent-path', null)"),
+                "json_path_string(column21, 'non-existent-path', null)", null, null),
             // Ensure that any transform function failures result in a null value if error on failure is false
-            new TransformConfig(NEW_WRONG_ARG_DATE_TRUNC_DERIVED_COLUMN_NAME, "dateTrunc('abcd', column1)")));
+            new TransformConfig(NEW_WRONG_ARG_DATE_TRUNC_DERIVED_COLUMN_NAME, "dateTrunc('abcd', column1)", null, null)));
     checkUpdateDefaultColumns();
 
     // Try to use the third schema and update default value again.

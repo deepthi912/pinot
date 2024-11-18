@@ -1,5 +1,3 @@
-package org.apache.pinot.spi.recordenricher;
-
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -18,18 +16,31 @@ package org.apache.pinot.spi.recordenricher;
  * specific language governing permissions and limitations
  * under the License.
  */
+package org.apache.pinot.segment.local.recordtransformer;
 
-/**
- * Interface for cluster constrains, which can be used to validate the record enricher configs
- */
-public class RecordEnricherValidationConfig {
-  private final boolean _groovyDisabled;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import org.apache.pinot.spi.data.readers.GenericRow;
 
-  public RecordEnricherValidationConfig(boolean groovyDisabled) {
-    _groovyDisabled = groovyDisabled;
+
+public class RecordEnricherPipeline {
+  private final List<RecordTransformer> _enrichers = new ArrayList<>();
+  private final Set<String> _columnsToExtract = new HashSet<>();
+
+  public static RecordEnricherPipeline getPassThroughPipeline() {
+    return new RecordEnricherPipeline();
   }
 
-  public boolean isGroovyDisabled() {
-    return _groovyDisabled;
+  public void add(RecordTransformer enricher) {
+    _enrichers.add(enricher);
+    _columnsToExtract.addAll(enricher.getInputColumns());
+  }
+
+  public void run(GenericRow record) {
+    for (RecordTransformer enricher : _enrichers) {
+      enricher.transform(record);
+    }
   }
 }

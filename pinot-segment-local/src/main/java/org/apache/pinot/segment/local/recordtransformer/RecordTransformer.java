@@ -19,6 +19,7 @@
 package org.apache.pinot.segment.local.recordtransformer;
 
 import java.io.Serializable;
+import java.util.List;
 import javax.annotation.Nullable;
 import org.apache.pinot.spi.data.readers.GenericRow;
 
@@ -42,5 +43,15 @@ public interface RecordTransformer extends Serializable {
    * @return Transformed record, or {@code null} if the record does not follow certain rules.
    */
   @Nullable
-  GenericRow transform(GenericRow record);
+  default GenericRow transform(GenericRow record) {
+    return null;
+  }
+
+  /**
+   * Returns the list of input columns required for enriching the record.
+   * This is used to make sure the required input fields are extracted.
+   */
+  default List<String> getInputColumns() {
+    return null;
+  }
 }
