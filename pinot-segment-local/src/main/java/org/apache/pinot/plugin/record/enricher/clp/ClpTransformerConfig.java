@@ -16,14 +16,25 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.spi.recordenricher;
+package org.apache.pinot.plugin.record.enricher.clp;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import java.io.IOException;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.List;
 
 
-public interface RecordEnricherFactory {
-  String getEnricherType();
-  RecordEnricher createEnricher(JsonNode enricherProps) throws IOException;
-  void validateEnrichmentConfig(JsonNode enricherProps, RecordEnricherValidationConfig validationConfig);
+/**
+ * Configuration for the CLP enricher.
+ */
+public class ClpTransformerConfig {
+  private final List<String> _fields;
+
+  @JsonCreator
+  public ClpTransformerConfig(@JsonProperty("fields") List<String> fields) {
+    _fields = fields;
+  }
+
+  public List<String> getFields() {
+    return _fields;
+  }
 }

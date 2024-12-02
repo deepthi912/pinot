@@ -22,11 +22,13 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableSet;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -42,6 +44,7 @@ import org.apache.pinot.common.request.context.FunctionContext;
 import org.apache.pinot.common.request.context.RequestContextUtils;
 import org.apache.pinot.common.tier.TierFactory;
 import org.apache.pinot.common.utils.config.TagNameUtils;
+import org.apache.pinot.plugin.record.enricher.function.CustomFunctionTransformer;
 import org.apache.pinot.segment.local.function.FunctionEvaluator;
 import org.apache.pinot.segment.local.function.FunctionEvaluatorFactory;
 import org.apache.pinot.segment.local.recordtransformer.SchemaConformingTransformer;
@@ -84,13 +87,14 @@ import org.apache.pinot.spi.data.FieldSpec;
 import org.apache.pinot.spi.data.FieldSpec.DataType;
 import org.apache.pinot.spi.data.Schema;
 import org.apache.pinot.spi.ingestion.batch.BatchConfig;
-import org.apache.pinot.spi.recordenricher.RecordEnricherRegistry;
-import org.apache.pinot.spi.recordenricher.RecordEnricherValidationConfig;
+import org.apache.pinot.segment.local.recordtransformer.RecordTransformerRegistry;
+import org.apache.pinot.segment.local.recordtransformer.RecordTransformerValidationConfig;
 import org.apache.pinot.spi.stream.StreamConfig;
 import org.apache.pinot.spi.stream.StreamConfigProperties;
 import org.apache.pinot.spi.utils.CommonConstants;
 import org.apache.pinot.spi.utils.DataSizeUtils;
 import org.apache.pinot.spi.utils.IngestionConfigUtils;
+import org.apache.pinot.spi.utils.JsonUtils;
 import org.apache.pinot.spi.utils.TimeUtils;
 import org.apache.pinot.spi.utils.builder.TableNameBuilder;
 import org.slf4j.Logger;
@@ -355,7 +359,8 @@ public final class TableConfigUtils {
    * 6. ingestion type for dimension tables
    */
   @VisibleForTesting
-  public static void validateIngestionConfig(TableConfig tableConfig, @Nullable Schema schema) {
+  public static void validateIngestionConfig(TableConfig tableConfig, @Nullable Schema schema)
+      throws IOException {
     IngestionConfig ingestionConfig = tableConfig.getIngestionConfig();
 
     if (ingestionConfig != null) {
@@ -537,19 +542,29 @@ public final class TableConfigUtils {
       }
 
       // Enrichment configs
-      List<EnrichmentConfig> enrichmentConfigs = ingestionConfig.getEnrichmentConfigs();
-      if (enrichmentConfigs != null) {
-        for (EnrichmentConfig enrichmentConfig : enrichmentConfigs) {
-          RecordEnricherRegistry.validateEnrichmentConfig(enrichmentConfig,
-              new RecordEnricherValidationConfig(_disableGroovy));
-        }
-      }
+//      List<TransformConfig> enrichmentConfigs = ingestionConfig.getTransformConfigs();
+//      if (enrichmentConfigs != null) {
+//        for (TransformConfig enrichmentConfig : enrichmentConfigs) {
+//          RecordTransformerRegistry.validateEnrichmentConfig(enrichmentConfig,
+//              new RecordTransformerValidationConfig(_disableGroovy));
+//        }
+//      }
 
       // Transform configs
       List<TransformConfig> transformConfigs = ingestionConfig.getTransformConfigs();
       if (transformConfigs != null) {
         Set<String> transformColumns = new HashSet<>();
         for (TransformConfig transformConfig : transformConfigs) {
+          if (_disableGroovy && transformConfig.getEnricherType() != null && transformConfig.getEnricherType()
+              .equals(CustomFunctionTransformer.ENRICHER_TYPE)) {
+            LinkedHashMap<String, String> fieldToFunctionMap =
+                JsonUtils.jsonNodeToObject(transformConfig.getProperties(), LinkedHashMap.class);
+            for (String function : fieldToFunctionMap.values()) {
+              if (FunctionEvaluatorFactory.isGroovyExpression(function)) {
+                throw new IllegalArgumentException("Groovy expression is not allowed for enrichment");
+              }
+            }
+          }
           String columnName = transformConfig.getColumnName();
           String transformFunction = transformConfig.getTransformFunction();
           if (columnName == null || transformFunction == null) {

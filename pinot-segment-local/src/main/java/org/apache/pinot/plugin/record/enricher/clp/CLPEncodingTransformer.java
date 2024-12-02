@@ -19,13 +19,19 @@
 package org.apache.pinot.plugin.record.enricher.clp;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.base.Preconditions;
 import com.yscope.clp.compressorfrontend.BuiltInVariableHandlingRuleVersions;
 import com.yscope.clp.compressorfrontend.EncodedMessage;
 import com.yscope.clp.compressorfrontend.MessageEncoder;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
+import org.apache.pinot.segment.local.function.FunctionEvaluator;
+import org.apache.pinot.segment.local.function.FunctionEvaluatorFactory;
+import org.apache.pinot.segment.local.recordtransformer.RecordTransformer;
+import org.apache.pinot.spi.config.table.ingestion.IngestionConfig;
+import org.apache.pinot.spi.config.table.ingestion.TransformConfig;
 import org.apache.pinot.spi.data.readers.GenericRow;
-import org.apache.pinot.spi.recordenricher.RecordEnricher;
 import org.apache.pinot.spi.utils.JsonUtils;
 import org.apache.pinot.sql.parsers.rewriter.ClpRewriter;
 import org.slf4j.Logger;
@@ -39,28 +45,45 @@ import org.slf4j.LoggerFactory;
  * 2. 'x_dictVars' - The dictionary variables of the encoded message
  * 3. 'x_encodedVars' - The encoded variables of the encoded message
  */
-public class CLPEncodingEnricher implements RecordEnricher {
-  private static final Logger LOGGER = LoggerFactory.getLogger(CLPEncodingEnricher.class);
-  private final ClpEnricherConfig _config;
+public class CLPEncodingTransformer implements RecordTransformer {
+  private static final Logger LOGGER = LoggerFactory.getLogger(CLPEncodingTransformer.class);
+  private static final String ENRICHER_TYPE = "clpEnricher";
   private final EncodedMessage _clpEncodedMessage;
   private final MessageEncoder _clpMessageEncoder;
+  private final List<String> _fields;
 
-  public CLPEncodingEnricher(JsonNode enricherProperties) throws IOException {
-    _config = JsonUtils.jsonNodeToObject(enricherProperties, ClpEnricherConfig.class);
-    _clpEncodedMessage = new EncodedMessage();
-    _clpMessageEncoder = new MessageEncoder(BuiltInVariableHandlingRuleVersions.VariablesSchemaV2,
-        BuiltInVariableHandlingRuleVersions.VariableEncodingMethodsV1);
+  public CLPEncodingTransformer(IngestionConfig ingestionConfig)
+      throws IOException {
+    if (ingestionConfig != null && ingestionConfig.getTransformConfigs() != null) {
+      for (TransformConfig transformConfig : ingestionConfig.getTransformConfigs()) {
+        if (transformConfig.getEnricherType() != null && transformConfig.getEnricherType().equals(ENRICHER_TYPE)) {
+          _fields = JsonUtils.jsonNodeToObject(transformConfig.getProperties(), List.class);
+          _clpEncodedMessage = new EncodedMessage();
+          _clpMessageEncoder = new MessageEncoder(BuiltInVariableHandlingRuleVersions.VariablesSchemaV2,
+              BuiltInVariableHandlingRuleVersions.VariableEncodingMethodsV1);
+          return;
+        }
+      }
+    }
+    _fields = new ArrayList<>();
+    _clpEncodedMessage = null;
+    _clpMessageEncoder = null;
   }
 
   @Override
   public List<String> getInputColumns() {
-    return _config.getFields();
+    return _fields;
   }
 
   @Override
-  public void enrich(GenericRow record) {
+  public boolean isNoOp() {
+    return _fields.isEmpty();
+  }
+
+  @Override
+  public GenericRow transform(GenericRow record) {
     try {
-      for (String field : _config.getFields()) {
+      for (String field : _fields) {
         Object value = record.getValue(field);
         if (value != null) {
           enrichWithClpEncodedFields(field, value, record);
@@ -69,6 +92,7 @@ public class CLPEncodingEnricher implements RecordEnricher {
     } catch (Exception e) {
       LOGGER.error("Failed to enrich record: {}", record);
     }
+    return record;
   }
 
   private void enrichWithClpEncodedFields(String key, Object value, GenericRow to) {

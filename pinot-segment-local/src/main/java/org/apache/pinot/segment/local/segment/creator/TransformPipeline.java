@@ -18,16 +18,23 @@
  */
 package org.apache.pinot.segment.local.segment.creator;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import javax.annotation.Nullable;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.pinot.segment.local.recordtransformer.ComplexTypeTransformer;
 import org.apache.pinot.segment.local.recordtransformer.CompositeTransformer;
+import org.apache.pinot.segment.local.recordtransformer.RecordEnricherTransformer;
 import org.apache.pinot.segment.local.recordtransformer.RecordTransformer;
+import org.apache.pinot.segment.local.recordtransformer.RecordTransformerRegistry;
 import org.apache.pinot.segment.local.utils.IngestionUtils;
 import org.apache.pinot.spi.config.table.TableConfig;
+import org.apache.pinot.spi.config.table.ingestion.IngestionConfig;
+import org.apache.pinot.spi.config.table.ingestion.TransformConfig;
 import org.apache.pinot.spi.data.Schema;
 import org.apache.pinot.spi.data.readers.GenericRow;
 
@@ -39,16 +46,18 @@ import org.apache.pinot.spi.data.readers.GenericRow;
 public class TransformPipeline {
   private final RecordTransformer _recordTransformer;
   private final ComplexTypeTransformer _complexTypeTransformer;
+  private final RecordEnricherTransformer _recordEnricherTransformer;
 
   /**
    * Constructs a transform pipeline with customized RecordTransformer and customized ComplexTypeTransformer
    * @param recordTransformer the customized record transformer
    * @param complexTypeTransformer the customized complexType transformer
    */
-  public TransformPipeline(RecordTransformer recordTransformer,
-      @Nullable ComplexTypeTransformer complexTypeTransformer) {
+  public TransformPipeline(RecordTransformer recordTransformer, @Nullable ComplexTypeTransformer complexTypeTransformer,
+      RecordEnricherTransformer recordEnricherTransformer) {
     _recordTransformer = recordTransformer;
     _complexTypeTransformer = complexTypeTransformer;
+    _recordEnricherTransformer = recordEnricherTransformer;
   }
 
   /**
@@ -56,20 +65,49 @@ public class TransformPipeline {
    * @param tableConfig the config for the table
    * @param schema the table schema
    */
-  public TransformPipeline(TableConfig tableConfig, Schema schema) {
+  public TransformPipeline(TableConfig tableConfig, Schema schema)
+      throws IOException {
     // Create record transformer
     _recordTransformer = CompositeTransformer.getDefaultTransformer(tableConfig, schema);
 
     // Create complex type transformer
     _complexTypeTransformer = ComplexTypeTransformer.getComplexTypeTransformer(tableConfig);
+    _recordEnricherTransformer = RecordEnricherTransformer.getDefaultTransformer(tableConfig);
   }
 
   /**
    * Returns a pass through pipeline that does not transform the record.
    */
-  public static TransformPipeline getPassThroughPipeline() {
+  public static TransformPipeline getPassThroughPipeline()
+      throws IOException {
     return new TransformPipeline(CompositeTransformer.getPassThroughTransformer(), null);
   }
+//
+//  public static TransformPipeline fromIngestionConfig(IngestionConfig ingestionConfig,
+//      TransformPipeline transformPipeline) {
+//    if (transformPipeline == null) {
+//      transformPipeline = new TransformPipeline();
+//    }
+//    if (null == ingestionConfig || null == ingestionConfig.getTransformConfigs()) {
+//      return transformPipeline;
+//    }
+//    List<TransformConfig> enrichmentConfigs = ingestionConfig.getTransformConfigs();
+//    for (TransformConfig enrichmentConfig : enrichmentConfigs) {
+//      try {
+//        if (enrichmentConfig.getEnricherType() != null) {
+//          RecordTransformer transformer = RecordTransformerRegistry.createRecordEnricher(enrichmentConfig);
+//          transformPipeline.add(transformer);
+//        }
+//      } catch (IOException e) {
+//        throw new RuntimeException("Failed to instantiate record enricher " + enrichmentConfig.getEnricherType(), e);
+//      }
+//    }
+//    return transformPipeline;
+//  }
+
+//  public static TransformPipeline fromTableConfig(TableConfig tableConfig, TransformPipeline transformPipeline) {
+//    return fromIngestionConfig(tableConfig.getIngestionConfig(), transformPipeline);
+//  }
 
   /**
    * Process and validate the decoded row against schema.
@@ -110,6 +148,16 @@ public class TransformPipeline {
     } else {
       reusedResult.incSkippedRowCount();
     }
+  }
+
+  public void run(GenericRow record) {
+    for (RecordTransformer transformer : _recordEnricherTransformer.getTransformers()) {
+      transformer.transform(record);
+    }
+  }
+
+  public List<String> getColumnsToExtact() {
+    return _recordEnricherTransformer.getColumnsToExtract();
   }
 
   /**

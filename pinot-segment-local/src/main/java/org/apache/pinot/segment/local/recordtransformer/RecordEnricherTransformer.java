@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import org.apache.pinot.plugin.record.enricher.clp.CLPEncodingTransformer;
+import org.apache.pinot.plugin.record.enricher.clp.ClpTransformerConfig;
 import org.apache.pinot.plugin.record.enricher.function.CustomFunctionTransformer;
 import org.apache.pinot.segment.local.utils.IngestionUtils;
 import org.apache.pinot.spi.config.table.TableConfig;
@@ -36,8 +37,9 @@ import org.apache.pinot.spi.data.readers.GenericRow;
 /**
  * The {@code CompositeTransformer} class performs multiple transforms based on the inner {@link RecordTransformer}s.
  */
-public class CompositeTransformer implements RecordTransformer {
+public class RecordEnricherTransformer implements RecordTransformer {
   private final List<RecordTransformer> _transformers;
+  private final List<String> _columnsToExtract;
 
   /**
    * Returns a record transformer that performs null value handling, time/expression/data-type transformation and record
@@ -84,50 +86,45 @@ public class CompositeTransformer implements RecordTransformer {
    *   </li>
    * </ul>
    */
-  public static List<RecordTransformer> getDefaultTransformers(TableConfig tableConfig, Schema schema) {
-    return Stream.of(new ExpressionTransformer(tableConfig, schema), new FilterTransformer(tableConfig),
-        new SchemaConformingTransformer(tableConfig, schema), new SchemaConformingTransformerV2(tableConfig, schema),
-        new DataTypeTransformer(tableConfig, schema), new TimeValidationTransformer(tableConfig, schema),
-        new SpecialValueTransformer(schema), new NullValueTransformer(tableConfig, schema),
-        new SanitizationTransformer(schema)).collect(Collectors.toList());
-  }
-
-  public static CompositeTransformer getDefaultTransformer(TableConfig tableConfig, Schema schema) {
-    List<RecordTransformer> recordTransformers = getDefaultTransformers(tableConfig, schema);
-    List<String> columnsToExtract = new ArrayList<>();
-    for(RecordTransformer recordTransformer : recordTransformers) {
-      columnsToExtract.addAll(recordTransformer.getInputColumns());
-    }
-    return new CompositeTransformer(recordTransformers, columnsToExtract);
-  }
-
-  /**
-   * Includes custom and default transformers.
-   * @param customTransformers
-   * @param tableConfig
-   * @param schema
-   * @return
-   */
-  public static CompositeTransformer composeAllTransformers(List<RecordTransformer> customTransformers,
-      TableConfig tableConfig, Schema schema) {
-    List<RecordTransformer> allTransformers = new ArrayList<>(customTransformers);
-    List<String> columnsToExtract = new ArrayList<>();
-    for (RecordTransformer recordTransformer : allTransformers) {
-      columnsToExtract.addAll(recordTransformer.getInputColumns());
-    }
-    allTransformers.addAll(getDefaultTransformers(tableConfig, schema));
-    return new CompositeTransformer(allTransformers, columnsToExtract);
+  public static List<RecordTransformer> getDefaultTransformers(TableConfig tableConfig)
+      throws IOException {
+    return Stream.of(new CLPEncodingTransformer(tableConfig.getIngestionConfig()),
+        new CustomFunctionTransformer(tableConfig.getIngestionConfig())).collect(Collectors.toList());
   }
 
   /**
    * Returns a pass through record transformer that does not transform the record.
    */
-  public static CompositeTransformer getPassThroughTransformer() {
-    return new CompositeTransformer(Collections.emptyList(), Collections.emptyList());
+  public static RecordEnricherTransformer getPassThroughTransformer() {
+    return new RecordEnricherTransformer(Collections.emptyList(), Collections.emptyList());
   }
 
-  public CompositeTransformer(List<RecordTransformer> transformers, List<String> columnsToExtract) {
+  public static RecordEnricherTransformer getDefaultTransformer(TableConfig tableConfig)
+      throws IOException {
+    List<RecordTransformer> recordTransformers = getDefaultTransformers(tableConfig);
+    List<String> columnsToExtract = new ArrayList<>();
+    for(RecordTransformer recordTransformer : recordTransformers) {
+      columnsToExtract.addAll(recordTransformer.getInputColumns());
+    }
+    return new RecordEnricherTransformer(recordTransformers, columnsToExtract);
+  }
+
+  public RecordEnricherTransformer(List<RecordTransformer> transformers, List<String> columnsToExtract) {
     _transformers = transformers;
+    _columnsToExtract = columnsToExtract;
+  }
+
+  public List<RecordTransformer> getTransformers() {
+    return _transformers;
+  }
+
+  public List<String> getColumnsToExtract() {
+    return _columnsToExtract;
+  }
+
+  public void add(RecordTransformer enricher) {
+    _transformers.add(enricher);
+    _columnsToExtract.addAll(enricher.getInputColumns());
   }
 
   @Nullable

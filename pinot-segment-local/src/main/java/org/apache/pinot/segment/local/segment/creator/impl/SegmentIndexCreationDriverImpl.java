@@ -82,7 +82,6 @@ import org.apache.pinot.spi.data.readers.GenericRow;
 import org.apache.pinot.spi.data.readers.RecordReader;
 import org.apache.pinot.spi.data.readers.RecordReaderFactory;
 import org.apache.pinot.spi.env.PinotConfiguration;
-import org.apache.pinot.spi.recordenricher.RecordEnricherPipeline;
 import org.apache.pinot.spi.utils.ByteArray;
 import org.apache.pinot.spi.utils.ReadMode;
 import org.slf4j.Logger;
@@ -105,7 +104,7 @@ public class SegmentIndexCreationDriverImpl implements SegmentIndexCreationDrive
   private SegmentIndexCreationInfo _segmentIndexCreationInfo;
   private SegmentCreationDataSource _dataSource;
   private Schema _dataSchema;
-  private RecordEnricherPipeline _recordEnricherPipeline;
+//  private RecordTransformerPipeline _recordTransformerPipeline;
   private TransformPipeline _transformPipeline;
   private IngestionSchemaValidator _ingestionSchemaValidator;
   private int _totalDocs = 0;
@@ -163,20 +162,10 @@ public class SegmentIndexCreationDriverImpl implements SegmentIndexCreationDrive
   public void init(SegmentGeneratorConfig config, RecordReader recordReader)
       throws Exception {
     SegmentCreationDataSource dataSource = new RecordReaderSegmentCreationDataSource(recordReader);
-    init(config, dataSource, RecordEnricherPipeline.fromTableConfig(config.getTableConfig()),
-        new TransformPipeline(config.getTableConfig(), config.getSchema()));
-  }
-
-  @Deprecated
-  public void init(SegmentGeneratorConfig config, SegmentCreationDataSource dataSource,
-      RecordTransformer recordTransformer, @Nullable ComplexTypeTransformer complexTypeTransformer)
-      throws Exception {
-    init(config, dataSource, RecordEnricherPipeline.fromTableConfig(config.getTableConfig()),
-        new TransformPipeline(recordTransformer, complexTypeTransformer));
+    init(config, dataSource, new TransformPipeline(config.getTableConfig(), config.getSchema()));
   }
 
   public void init(SegmentGeneratorConfig config, SegmentCreationDataSource dataSource,
-      RecordEnricherPipeline enricherPipeline,
       TransformPipeline transformPipeline)
       throws Exception {
     _config = config;
@@ -187,11 +176,9 @@ public class SegmentIndexCreationDriverImpl implements SegmentIndexCreationDrive
     if (config.isFailOnEmptySegment()) {
       Preconditions.checkState(_recordReader.hasNext(), "No record in data source");
     }
-    _recordEnricherPipeline = enricherPipeline;
     _transformPipeline = transformPipeline;
     // Use the same transform pipeline if the data source is backed by a record reader
     if (dataSource instanceof RecordReaderSegmentCreationDataSource) {
-      ((RecordReaderSegmentCreationDataSource) dataSource).setRecordEnricherPipeline(enricherPipeline);
       ((RecordReaderSegmentCreationDataSource) dataSource).setTransformPipeline(transformPipeline);
     }
 
@@ -283,7 +270,7 @@ public class SegmentIndexCreationDriverImpl implements SegmentIndexCreationDrive
 
           // Should not be needed anymore.
           // Add row to indexes
-          _recordEnricherPipeline.run(decodedRow);
+          _transformPipeline.run(decodedRow);
           _transformPipeline.processRow(decodedRow, reusedResult);
 
           recordReadStopTimeNs = System.nanoTime();

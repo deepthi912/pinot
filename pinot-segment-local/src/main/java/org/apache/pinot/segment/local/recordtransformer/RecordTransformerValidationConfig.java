@@ -1,3 +1,5 @@
+package org.apache.pinot.segment.local.recordtransformer;
+
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -16,25 +18,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.plugin.record.enricher.clp;
-
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import java.util.List;
-
 
 /**
- * Configuration for the CLP enricher.
+ * Interface for cluster constrains, which can be used to validate the record enricher configs
  */
-public class ClpEnricherConfig {
-  private final List<String> _fields;
+public class RecordTransformerValidationConfig {
+  private final boolean _groovyDisabled;
 
-  @JsonCreator
-  public ClpEnricherConfig(@JsonProperty("fields") List<String> fields) {
-    _fields = fields;
+  public RecordTransformerValidationConfig(boolean groovyDisabled) {
+    _groovyDisabled = groovyDisabled;
   }
 
-  public List<String> getFields() {
-    return _fields;
+  public boolean isGroovyDisabled() {
+    return _groovyDisabled;
   }
 }

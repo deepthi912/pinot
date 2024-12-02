@@ -22,13 +22,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.google.auto.service.AutoService;
 import java.io.IOException;
 import org.apache.pinot.segment.local.function.FunctionEvaluatorFactory;
-import org.apache.pinot.spi.recordenricher.RecordEnricher;
-import org.apache.pinot.spi.recordenricher.RecordEnricherFactory;
-import org.apache.pinot.spi.recordenricher.RecordEnricherValidationConfig;
+import org.apache.pinot.segment.local.recordtransformer.RecordTransformer;
+import org.apache.pinot.segment.local.recordtransformer.RecordTransformerFactory;
+import org.apache.pinot.segment.local.recordtransformer.RecordTransformerValidationConfig;
 import org.apache.pinot.spi.utils.JsonUtils;
 
-@AutoService(RecordEnricherFactory.class)
-public class CustomFunctionEnricherFactory implements RecordEnricherFactory {
+@AutoService(RecordTransformerFactory.class)
+public class CustomFunctionTransformerFactory implements RecordTransformerFactory {
   private static final String TYPE = "generateColumn";
   @Override
   public String getEnricherType() {
@@ -36,16 +36,16 @@ public class CustomFunctionEnricherFactory implements RecordEnricherFactory {
   }
 
   @Override
-  public RecordEnricher createEnricher(JsonNode enricherProps)
+  public RecordTransformer createTransformer(JsonNode enricherProps)
       throws IOException {
-    return new CustomFunctionEnricher(enricherProps);
+    return new CustomFunctionTransformer(enricherProps);
   }
 
   @Override
-  public void validateEnrichmentConfig(JsonNode enricherProps, RecordEnricherValidationConfig validationConfig) {
-    CustomFunctionEnricherConfig config;
+  public void validateEnrichmentConfig(JsonNode enricherProps, RecordTransformerValidationConfig validationConfig) {
+    CustomFunctionTransformerConfig config;
     try {
-      config = JsonUtils.jsonNodeToObject(enricherProps, CustomFunctionEnricherConfig.class);
+      config = JsonUtils.jsonNodeToObject(enricherProps, CustomFunctionTransformerConfig.class);
       if (!validationConfig.isGroovyDisabled()) {
         return;
       }
