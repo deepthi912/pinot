@@ -122,7 +122,7 @@ public class MultiStageBrokerRequestHandler extends BaseBrokerRequestHandler {
 
     failureDetector.registerUnhealthyServerRetrier(this::retryUnhealthyServer);
     _queryDispatcher =
-        new QueryDispatcher(new MailboxService(hostname, port, config, tlsConfig), tlsConfig, failureDetector,
+        new QueryDispatcher(new MailboxService(hostname, port, config, tlsConfig), failureDetector, tlsConfig,
             this.isQueryCancellationEnabled());
     LOGGER.info("Initialized MultiStageBrokerRequestHandler on host: {}, port: {} with broker id: {}, timeout: {}ms, "
             + "query log max length: {}, query log max rate: {}, query cancellation enabled: {}", hostname, port,
@@ -551,12 +551,12 @@ public class MultiStageBrokerRequestHandler extends BaseBrokerRequestHandler {
   /**
    * Check if a server that was previously detected as unhealthy is now healthy.
    */
-  public boolean retryUnhealthyServer(String instanceId) {
+  public FailureDetector.ServerState retryUnhealthyServer(String instanceId) {
     LOGGER.info("Checking gRPC connection to unhealthy server: {}", instanceId);
     ServerInstance serverInstance = _routingManager.getEnabledServerInstanceMap().get(instanceId);
     if (serverInstance == null) {
       LOGGER.info("Failed to find enabled server: {} in routing manager, skipping the retry", instanceId);
-      return false;
+      return FailureDetector.ServerState.UNHEALTHY;
     }
 
     return _queryDispatcher.checkConnectivityToInstance(instanceId);
