@@ -16,21 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.plugin.inputformat.avro;
+package org.apache.pinot.spi.data;
 
-import org.apache.pinot.spi.data.readers.RecordReaderConfig;
+import org.apache.pinot.spi.config.BaseJsonConfig;
+
 
 /**
- * Config for {@link AvroRecordReader}
+ * This class represents the configuration for a physical table in {@link LogicalTableConfig}.
+ * This is empty by design and more docs would be added as features are added.
  */
-public class AvroRecordReaderConfig implements RecordReaderConfig {
-  private boolean _enableLogicalTypes = true;
-
-  public boolean isEnableLogicalTypes() {
-    return _enableLogicalTypes;
-  }
-
-  public void setEnableLogicalTypes(boolean enableLogicalTypes) {
-    _enableLogicalTypes = enableLogicalTypes;
-  }
+public class PhysicalTableConfig extends BaseJsonConfig {
 }

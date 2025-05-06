@@ -16,21 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.plugin.inputformat.avro;
+package org.apache.pinot.spi.config.provider;
 
-import org.apache.pinot.spi.data.readers.RecordReaderConfig;
+import java.util.List;
+import org.apache.pinot.spi.data.LogicalTableConfig;
 
-/**
- * Config for {@link AvroRecordReader}
- */
-public class AvroRecordReaderConfig implements RecordReaderConfig {
-  private boolean _enableLogicalTypes = true;
 
-  public boolean isEnableLogicalTypes() {
-    return _enableLogicalTypes;
-  }
-
-  public void setEnableLogicalTypes(boolean enableLogicalTypes) {
-    _enableLogicalTypes = enableLogicalTypes;
-  }
+public interface LogicalTableConfigChangeListener {
+  /**
+   * The callback to be invoked on logical table changes
+   * @param logicalTableConfigList the entire list of logical tables in the cluster
+   */
+  void onChange(List<LogicalTableConfig> logicalTableConfigList);
 }
