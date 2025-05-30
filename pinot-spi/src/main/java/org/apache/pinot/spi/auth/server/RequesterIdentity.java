@@ -16,14 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.segment.local.segment.index.map;
+package org.apache.pinot.spi.auth.server;
 
-import java.io.File;
-import org.apache.pinot.segment.spi.index.creator.MapIndexCreator;
-import org.apache.pinot.spi.config.table.MapIndexConfig;
-
-
-public abstract class BaseMapIndexCreator implements MapIndexCreator {
-  public BaseMapIndexCreator(File indexDir, String name, MapIndexConfig indexConfig) {
-  }
+public abstract class RequesterIdentity {
 }

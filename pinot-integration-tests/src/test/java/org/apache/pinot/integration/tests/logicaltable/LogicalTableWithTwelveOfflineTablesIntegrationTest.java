@@ -16,12 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.broker.api;
+package org.apache.pinot.integration.tests.logicaltable;
 
-import org.apache.pinot.spi.utils.CommonConstants;
+import java.util.List;
 
-public abstract class RequesterIdentity {
-  public String getClientIp() {
-    return CommonConstants.UNKNOWN;
+
+public class LogicalTableWithTwelveOfflineTablesIntegrationTest extends BaseLogicalTableIntegrationTest {
+  @Override
+  protected List<String> getOfflineTableNames() {
+    return List.of("physicalTable_0", "physicalTable_1", "physicalTable_2", "physicalTable_3", "physicalTable_4",
+        "physicalTable_5", "physicalTable_6", "physicalTable_7", "physicalTable_8", "physicalTable_9",
+        "physicalTable_10", "physicalTable_11");
   }
 }

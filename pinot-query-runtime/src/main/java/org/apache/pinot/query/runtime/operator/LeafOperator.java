@@ -70,13 +70,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-/// Leaf-stage operator processes the leaf stage of a multi-stage query with single-stage engine on the server.
+/// Leaf operator processes the leaf stage of a multi-stage query with single-stage engine on the server.
 /// The data schema of the result expected from leaf stage might be different from the one returned from single-stage
 /// engine, thus the leaf stage operator needs to convert the data types of the result to conform with the expected
 /// data schema.
-public class LeafStageOperator extends MultiStageOperator {
-  private static final Logger LOGGER = LoggerFactory.getLogger(LeafStageOperator.class);
-  private static final String EXPLAIN_NAME = "LEAF_STAGE";
+public class LeafOperator extends MultiStageOperator {
+  private static final Logger LOGGER = LoggerFactory.getLogger(LeafOperator.class);
+  private static final String EXPLAIN_NAME = "LEAF";
 
   // Use a special results block to indicate that this is the last results block
   private static final MetadataResultsBlock LAST_RESULTS_BLOCK = new MetadataResultsBlock();
@@ -94,7 +94,7 @@ public class LeafStageOperator extends MultiStageOperator {
   private volatile Map<Integer, String> _exceptions;
   private final StatMap<StatKey> _statMap = new StatMap<>(StatKey.class);
 
-  public LeafStageOperator(OpChainExecutionContext context, List<ServerQueryRequest> requests, DataSchema dataSchema,
+  public LeafOperator(OpChainExecutionContext context, List<ServerQueryRequest> requests, DataSchema dataSchema,
       QueryExecutor queryExecutor, ExecutorService executorService) {
     super(context);
     int numRequests = requests.size();
@@ -267,6 +267,12 @@ public class LeafStageOperator extends MultiStageOperator {
             break;
           case RESPONSE_SER_CPU_TIME_NS:
             _statMap.merge(StatKey.RESPONSE_SER_CPU_TIME_NS, Long.parseLong(entry.getValue()));
+            break;
+          case THREAD_MEM_ALLOCATED_BYTES:
+            _statMap.merge(StatKey.THREAD_MEM_ALLOCATED_BYTES, Long.parseLong(entry.getValue()));
+            break;
+          case RESPONSE_SER_MEM_ALLOCATED_BYTES:
+            _statMap.merge(StatKey.RESPONSE_SER_MEM_ALLOCATED_BYTES, Long.parseLong(entry.getValue()));
             break;
           case NUM_SEGMENTS_PRUNED_BY_SERVER:
             _statMap.merge(StatKey.NUM_SEGMENTS_PRUNED_BY_SERVER, Integer.parseInt(entry.getValue()));
@@ -648,6 +654,8 @@ public class LeafStageOperator extends MultiStageOperator {
     NUM_RESIZES(StatMap.Type.INT, null),
     RESIZE_TIME_MS(StatMap.Type.LONG, null),
     THREAD_CPU_TIME_NS(StatMap.Type.LONG, null),
+    THREAD_MEM_ALLOCATED_BYTES(StatMap.Type.LONG, null),
+    RESPONSE_SER_MEM_ALLOCATED_BYTES(StatMap.Type.LONG, null),
     SYSTEM_ACTIVITIES_CPU_TIME_NS(StatMap.Type.LONG, null),
     RESPONSE_SER_CPU_TIME_NS(StatMap.Type.LONG, null) {
       @Override

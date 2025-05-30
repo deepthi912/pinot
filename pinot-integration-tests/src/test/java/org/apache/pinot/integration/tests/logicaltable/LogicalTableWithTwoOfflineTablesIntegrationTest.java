@@ -16,30 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.segment.local.segment.index.map;
+package org.apache.pinot.integration.tests.logicaltable;
 
-import java.io.IOException;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import org.apache.pinot.segment.spi.index.mutable.MutableIndex;
-import org.apache.pinot.segment.spi.index.mutable.provider.MutableIndexContext;
-import org.apache.pinot.spi.config.table.MapIndexConfig;
+import java.util.List;
 
 
-public class MutableMapIndexImpl implements MutableIndex {
-  public MutableMapIndexImpl(MutableIndexContext context, MapIndexConfig config) {
-  }
-
+public class LogicalTableWithTwoOfflineTablesIntegrationTest extends BaseLogicalTableIntegrationTest {
   @Override
-  public void add(@Nonnull Object value, int dictId, int docId) {
-  }
-
-  @Override
-  public void add(@Nonnull Object[] values, @Nullable int[] dictIds, int docId) {
-  }
-
-  @Override
-  public void close()
-      throws IOException {
+  protected List<String> getOfflineTableNames() {
+    return List.of("physicalTable_0", "physicalTable_1");
   }
 }
