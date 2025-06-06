@@ -70,6 +70,8 @@ import org.apache.pinot.controller.api.resources.PauseStatusDetails;
 import org.apache.pinot.controller.api.resources.TableViews;
 import org.apache.pinot.controller.helix.core.PinotHelixResourceManager;
 import org.apache.pinot.core.realtime.impl.fakestream.FakeStreamConfigUtils;
+import org.apache.pinot.spi.config.table.QueryConfig;
+import org.apache.pinot.spi.config.table.QuotaConfig;
 import org.apache.pinot.spi.config.table.TableConfig;
 import org.apache.pinot.spi.config.table.TableType;
 import org.apache.pinot.spi.data.DateTimeFieldSpec;
@@ -79,6 +81,7 @@ import org.apache.pinot.spi.data.LogicalTableConfig;
 import org.apache.pinot.spi.data.MetricFieldSpec;
 import org.apache.pinot.spi.data.PhysicalTableConfig;
 import org.apache.pinot.spi.data.Schema;
+import org.apache.pinot.spi.data.TimeBoundaryConfig;
 import org.apache.pinot.spi.env.PinotConfiguration;
 import org.apache.pinot.spi.utils.CommonConstants;
 import org.apache.pinot.spi.utils.CommonConstants.Helix;
@@ -93,6 +96,7 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testng.annotations.DataProvider;
 
 import static org.apache.pinot.spi.utils.CommonConstants.Helix.UNTAGGED_BROKER_INSTANCE;
 import static org.apache.pinot.spi.utils.CommonConstants.Helix.UNTAGGED_SERVER_INSTANCE;
@@ -395,9 +399,18 @@ public class ControllerTest {
     for (String physicalTableName : physicalTableNames) {
       physicalTableConfigMap.put(physicalTableName, new PhysicalTableConfig());
     }
+    String offlineTableName =
+        physicalTableNames.stream().filter(TableNameBuilder::isOfflineTableResource).findFirst().orElse(null);
+    String realtimeTableName =
+        physicalTableNames.stream().filter(TableNameBuilder::isRealtimeTableResource).findFirst().orElse(null);
     LogicalTableConfigBuilder builder = new LogicalTableConfigBuilder()
         .setTableName(tableName)
         .setBrokerTenant(brokerTenant)
+        .setRefOfflineTableName(offlineTableName)
+        .setRefRealtimeTableName(realtimeTableName)
+        .setQuotaConfig(new QuotaConfig(null, "99999"))
+        .setQueryConfig(new QueryConfig(1L, true, false, null, 1L, 1L))
+        .setTimeBoundaryConfig(new TimeBoundaryConfig("min", Map.of("includedTables", physicalTableNames)))
         .setPhysicalTableConfigMap(physicalTableConfigMap);
     return builder.build();
   }
@@ -740,9 +753,19 @@ public class ControllerTest {
     getControllerRequestClient().addTableConfig(tableConfig);
   }
 
+  public void addLogicalTableConfig(LogicalTableConfig logicalTableConfig)
+      throws IOException {
+    getControllerRequestClient().addLogicalTableConfig(logicalTableConfig);
+  }
+
   public void updateTableConfig(TableConfig tableConfig)
       throws IOException {
     getControllerRequestClient().updateTableConfig(tableConfig);
+  }
+
+  public void updateLogicalTableConfig(LogicalTableConfig logicalTableConfig)
+      throws IOException {
+    getControllerRequestClient().updateLogicalTableConfig(logicalTableConfig);
   }
 
   public void toggleTableState(String tableName, TableType type, boolean enable)
@@ -832,9 +855,9 @@ public class ControllerTest {
     return getControllerRequestClient().checkIfReloadIsNeeded(tableNameWithType, verbose);
   }
 
-  public void reloadOfflineSegment(String tableName, String segmentName, boolean forceDownload)
+  public String reloadOfflineSegment(String tableName, String segmentName, boolean forceDownload)
       throws IOException {
-    getControllerRequestClient().reloadSegment(tableName, segmentName, forceDownload);
+    return getControllerRequestClient().reloadSegment(tableName, segmentName, forceDownload);
   }
 
   public String reloadRealtimeTable(String tableName)
@@ -1225,6 +1248,14 @@ public class ControllerTest {
     assertTrue(CollectionUtils.isEmpty(getHelixResourceManager().getSchemaNames()));
   }
 
+  @DataProvider
+  public Object[][] tableTypeProvider() {
+    return new Object[][]{
+        {TableType.OFFLINE},
+        {TableType.REALTIME}
+    };
+  }
+
   /**
    * Clean shared state after a test case class has completed running. Additional cleanup may be needed depending upon
    * test functionality.
@@ -1254,7 +1285,7 @@ public class ControllerTest {
     }, 60_000L, "Failed to clean up all the external views");
 
     // Delete all schemas.
-    List<String> schemaNames = _helixResourceManager.getSchemaNames();
+    List<String> schemaNames = _helixResourceManager.getAllSchemaNames();
     if (CollectionUtils.isNotEmpty(schemaNames)) {
       for (String schemaName : schemaNames) {
         getHelixResourceManager().deleteSchema(schemaName);

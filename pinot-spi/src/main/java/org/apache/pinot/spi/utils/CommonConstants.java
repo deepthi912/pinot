@@ -22,6 +22,7 @@ import java.io.File;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.apache.commons.io.FileUtils;
 import org.apache.pinot.spi.query.QueryThreadContext;
@@ -460,6 +461,10 @@ public class CommonConstants {
             "pinot.broker.enable.dynamic.filtering.semijoin";
     public static final boolean DEFAULT_ENABLE_DYNAMIC_FILTERING_SEMI_JOIN = true;
 
+    // When the server instance's pool field is null or the pool contains multi distinguished group value, the broker
+    // would set the group to -1 in the routing table for that server.
+    public static final int FALLBACK_REPLICA_GROUP_ID = -1;
+
     public static class Request {
       public static final String SQL = "sql";
       public static final String SQL_V1 = "sqlV1";
@@ -497,6 +502,12 @@ public class CommonConstants {
         public static final String MIN_BROKER_GROUP_TRIM_SIZE = "minBrokerGroupTrimSize";
         public static final String MSE_MIN_GROUP_TRIM_SIZE = "mseMinGroupTrimSize";
 
+        /**
+         * This will help in getting accurate and correct result for queries
+         * with group by and limit but  without order by
+         */
+        public static final String ACCURATE_GROUP_BY_WITHOUT_ORDER_BY = "accurateGroupByWithoutOrderBy";
+
         /** Number of threads used in the final reduce.
          * This is useful for expensive aggregation functions. E.g. Funnel queries are considered as expensive
          * aggregation functions. */
@@ -506,6 +517,8 @@ public class CommonConstants {
         public static final String CHUNK_SIZE_EXTRACT_FINAL_RESULT = "chunkSizeExtractFinalResult";
 
         public static final String NUM_REPLICA_GROUPS_TO_QUERY = "numReplicaGroupsToQuery";
+
+        public static final String ORDERED_PREFERRED_REPLICAS = "orderedPreferredReplicas";
         public static final String USE_FIXED_REPLICA = "useFixedReplica";
         public static final String EXPLAIN_PLAN_VERBOSE = "explainPlanVerbose";
         public static final String USE_MULTISTAGE_ENGINE = "useMultistageEngine";
@@ -614,6 +627,27 @@ public class CommonConstants {
         // Use MSE compiler when trying to fill a response with no schema metadata
         // (overrides the "pinot.broker.use.mse.to.fill.empty.response.schema" broker conf)
         public static final String USE_MSE_TO_FILL_EMPTY_RESPONSE_SCHEMA = "useMSEToFillEmptyResponseSchema";
+
+        // Used by the MSE Engine when auto-inferring data partitioning. Realtime streams can often incorrectly assign
+        // records to stream partitions, which can make a segment have multiple partitions. The scale of this is
+        // usually low, and this query option allows the MSE Optimizer to infer the partition of a segment based on its
+        // name, when that segment has multiple partitions in its columnPartitionMap.
+        @Deprecated
+        public static final String INFER_INVALID_SEGMENT_PARTITION = "inferInvalidSegmentPartition";
+        // For realtime tables, this infers the segment partition for all segments. The partition column, function,
+        // and number of partitions still rely on the Table's segmentPartitionConfig. This is useful if you have
+        // scenarios where the stream doesn't guarantee 100% accuracy for stream partition assignment. In such
+        // scenarios, if you don't have upsert compaction enabled, inferInvalidSegmentPartition will suffice. But when
+        // you have compaction enabled, it's possible that after compaction you are only left with invalid partition
+        // records, which can change the partition of a segment from something like [1, 3, 5] to [5], for a segment
+        // that was supposed to be in partition-1.
+        public static final String INFER_REALTIME_SEGMENT_PARTITION = "inferRealtimeSegmentPartition";
+        public static final String USE_LITE_MODE = "useLiteMode";
+        // Used by the MSE Engine to determine whether to use the broker pruning logic. Only supported by the
+        // new MSE query optimizer.
+        // TODO(mse-physical): Consider removing this query option and making this the default, since there's already
+        //   a table config to enable broker pruning (it is disabled by default).
+        public static final String USE_BROKER_PRUNING = "useBrokerPruning";
       }
 
       public static class QueryOptionValue {
@@ -899,15 +933,47 @@ public class CommonConstants {
     public static final int DEFAULT_MSE_MIN_GROUP_TRIM_SIZE = 5000;
 
     // TODO: Merge this with "mse"
+    /**
+     * The ExecutorServiceProvider to use for execution threads, which are the ones that execute
+     * MultiStageOperators (and SSE operators in the leaf stages).
+     *
+     * It is recommended to use cached. In case fixed is used, it should use a large enough number of threads or
+     * parent operators may consume all threads.
+     * In Java 21 or newer, virtual threads are a good solution. Although Apache Pinot doesn't include this option yet,
+     * it is trivial to implement that plugin.
+     *
+     * See QueryRunner
+     */
     public static final String MULTISTAGE_EXECUTOR = "multistage.executor";
     public static final String MULTISTAGE_EXECUTOR_CONFIG_PREFIX =
         QUERY_EXECUTOR_CONFIG_PREFIX + "." + MULTISTAGE_EXECUTOR;
     public static final String DEFAULT_MULTISTAGE_EXECUTOR_TYPE = "cached";
+    /**
+     * The ExecutorServiceProvider to be used for submission threads, which are the ones
+     * that receive requests in protobuf and transform them into MultiStageOperators.
+     *
+     * It is recommended to use a fixed thread pool, given submission code should not block.
+     *
+     * See QueryServer
+     */
+    public static final String MULTISTAGE_SUBMISSION_EXEC_CONFIG_PREFIX =
+        QUERY_EXECUTOR_CONFIG_PREFIX + "." + "multistage.submission";
+    public static final String DEFAULT_MULTISTAGE_SUBMISSION_EXEC_TYPE = "fixed";
     @Deprecated
     public static final String CONFIG_OF_QUERY_EXECUTOR_OPCHAIN_EXECUTOR = MULTISTAGE_EXECUTOR_CONFIG_PREFIX;
     @Deprecated
     public static final String DEFAULT_QUERY_EXECUTOR_OPCHAIN_EXECUTOR = DEFAULT_MULTISTAGE_EXECUTOR_TYPE;
 
+    /**
+     * The ExecutorServiceProvider to be used for timeseries threads.
+     *
+     * It is recommended to use a cached thread pool, given timeseries endpoints are blocking.
+     *
+     * See QueryServer
+     */
+    public static final String MULTISTAGE_TIMESERIES_EXEC_CONFIG_PREFIX =
+        QUERY_EXECUTOR_CONFIG_PREFIX + "." + "timeseries";
+    public static final String DEFAULT_TIMESERIES_EXEC_CONFIG_PREFIX = "cached";
     /* End of query executor related configs */
 
     public static final String CONFIG_OF_TRANSFORM_FUNCTIONS = "pinot.server.transforms";
@@ -1400,6 +1466,7 @@ public class CommonConstants {
       public static final String DOCID = "$docId";
       public static final String HOSTNAME = "$hostName";
       public static final String SEGMENTNAME = "$segmentName";
+      public static final Set<String> BUILT_IN_VIRTUAL_COLUMNS = Set.of(DOCID, HOSTNAME, SEGMENTNAME);
     }
   }
 

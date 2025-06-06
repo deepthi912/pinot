@@ -51,6 +51,7 @@ import org.apache.pinot.segment.spi.index.IndexService;
 import org.apache.pinot.segment.spi.index.IndexType;
 import org.apache.pinot.segment.spi.index.StandardIndexes;
 import org.apache.pinot.segment.spi.index.startree.AggregationFunctionColumnPair;
+import org.apache.pinot.spi.config.table.DedupConfig;
 import org.apache.pinot.spi.config.table.FieldConfig;
 import org.apache.pinot.spi.config.table.FieldConfig.CompressionCodec;
 import org.apache.pinot.spi.config.table.FieldConfig.EncodingType;
@@ -169,6 +170,7 @@ public final class TableConfigUtils {
       validateFieldConfigList(tableConfig, schema);
       validateInstancePartitionsTypeMapConfig(tableConfig);
       validatePartitionedReplicaGroupInstance(tableConfig);
+      validateInstanceAssignmentConfigs(tableConfig);
       if (!skipTypes.contains(ValidationType.UPSERT)) {
         validateUpsertAndDedupConfig(tableConfig, schema);
         validatePartialUpsertStrategies(tableConfig, schema);
@@ -798,6 +800,7 @@ public final class TableConfigUtils {
         "InstanceAssignmentConfig for COMPLETED is not allowed for upsert tables");
     validateAggregateMetricsForUpsertConfig(tableConfig);
     validateTTLForUpsertConfig(tableConfig, schema);
+    validateTTLForDedupConfig(tableConfig, schema);
   }
 
   /**
@@ -819,6 +822,12 @@ public final class TableConfigUtils {
       Preconditions.checkState(comparisonColumnDataType.isNumeric(),
           "MetadataTTL / DeletedKeysTTL must have comparison column: %s in numeric type, found: %s", comparisonColumn,
           comparisonColumnDataType);
+    } else {
+      String comparisonColumn = tableConfig.getValidationConfig().getTimeColumnName();
+      DataType comparisonColumnDataType = schema.getFieldSpecFor(comparisonColumn).getDataType();
+      Preconditions.checkState(comparisonColumnDataType.isNumeric(),
+          "MetadataTTL / DeletedKeysTTL must have time column: %s in numeric type, found: %s", comparisonColumn,
+          comparisonColumnDataType);
     }
 
     if (upsertConfig.getMetadataTTL() > 0) {
@@ -830,6 +839,30 @@ public final class TableConfigUtils {
     if (upsertConfig.getDeletedKeysTTL() > 0) {
       Preconditions.checkState(upsertConfig.getDeleteRecordColumn() != null,
           "Deleted Keys TTL can only be enabled with deleteRecordColumn set.");
+    }
+  }
+
+  /**
+   * Validates the dedup config related to TTL.
+   */
+  @VisibleForTesting
+  static void validateTTLForDedupConfig(TableConfig tableConfig, Schema schema) {
+    DedupConfig dedupConfig = tableConfig.getDedupConfig();
+    if (dedupConfig == null || (dedupConfig.getMetadataTTL() <= 0)) {
+      return;
+    }
+
+    String dedupTimeColumn = dedupConfig.getDedupTimeColumn();
+    if (dedupTimeColumn != null && !dedupTimeColumn.isEmpty()) {
+      DataType comparisonColumnDataType = schema.getFieldSpecFor(dedupTimeColumn).getDataType();
+      Preconditions.checkState(comparisonColumnDataType.isNumeric(),
+          "MetadataTTL must have dedupTimeColumn: %s in numeric type, found: %s", dedupTimeColumn,
+          comparisonColumnDataType);
+    } else {
+      String timeColumn = tableConfig.getValidationConfig().getTimeColumnName();
+      DataType timeColumnDataType = schema.getFieldSpecFor(timeColumn).getDataType();
+      Preconditions.checkState(timeColumnDataType.isNumeric(),
+          "MetadataTTL must have time column: %s in numeric type, found: %s", timeColumn, timeColumnDataType);
     }
   }
 
@@ -878,6 +911,35 @@ public final class TableConfigUtils {
       boolean isNullReplicaGroupPartitionConfig = entry.getValue().getReplicaGroupPartitionConfig() == null;
       Preconditions.checkState(isNullReplicaGroupPartitionConfig,
           "Both replicaGroupStrategyConfig and replicaGroupPartitionConfig is provided");
+    }
+  }
+
+  @VisibleForTesting
+  static void validateInstanceAssignmentConfigs(TableConfig tableConfig) {
+    if (tableConfig.getInstanceAssignmentConfigMap() == null) {
+      return;
+    }
+    for (Map.Entry<String, InstanceAssignmentConfig> instanceAssignmentConfigMapEntry
+        : tableConfig.getInstanceAssignmentConfigMap().entrySet()) {
+      String instancePartitionsType = instanceAssignmentConfigMapEntry.getKey();
+      InstanceAssignmentConfig instanceAssignmentConfig = instanceAssignmentConfigMapEntry.getValue();
+      if (instanceAssignmentConfig.getPartitionSelector()
+          == InstanceAssignmentConfig.PartitionSelector.IMPLICIT_REALTIME_TABLE_PARTITION_SELECTOR) {
+        Preconditions.checkState(tableConfig.getTableType() == TableType.REALTIME,
+            "IMPLICIT_REALTIME_TABLE_PARTITION_SELECTOR can only be used for REALTIME tables");
+        Preconditions.checkState(InstancePartitionsType.CONSUMING.name().equalsIgnoreCase(instancePartitionsType),
+            "IMPLICIT_REALTIME_TABLE_PARTITION_SELECTOR can only be used for CONSUMING instance partitions type");
+        Preconditions.checkState(instanceAssignmentConfig.getReplicaGroupPartitionConfig().isReplicaGroupBased(),
+            "IMPLICIT_REALTIME_TABLE_PARTITION_SELECTOR can only be used with replica group based instance assignment");
+        Preconditions.checkState(instanceAssignmentConfig.getReplicaGroupPartitionConfig().getNumPartitions() == 0,
+            "numPartitions should not be explicitly set when using IMPLICIT_REALTIME_TABLE_PARTITION_SELECTOR");
+        // Allow 0 because that's the default (unset) value.
+        Preconditions.checkState(
+            instanceAssignmentConfig.getReplicaGroupPartitionConfig().getNumInstancesPerPartition() == 0
+                || instanceAssignmentConfig.getReplicaGroupPartitionConfig().getNumInstancesPerPartition() == 1,
+            "numInstancesPerPartition must be 1 when using IMPLICIT_REALTIME_TABLE_PARTITION_SELECTOR");
+      }
+      // TODO: Add more validations for other partition selectors here
     }
   }
 

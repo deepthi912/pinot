@@ -19,14 +19,23 @@
 package org.apache.pinot.spi.utils.builder;
 
 import java.util.Map;
+import org.apache.pinot.spi.config.table.QueryConfig;
+import org.apache.pinot.spi.config.table.QuotaConfig;
 import org.apache.pinot.spi.data.LogicalTableConfig;
 import org.apache.pinot.spi.data.PhysicalTableConfig;
+import org.apache.pinot.spi.data.TimeBoundaryConfig;
 
 
 public class LogicalTableConfigBuilder {
   private String _tableName;
   private Map<String, PhysicalTableConfig> _physicalTableConfigMap;
   private String _brokerTenant;
+  private QueryConfig _queryConfig;
+  private QuotaConfig _quotaConfig;
+  private String _refOfflineTableName;
+  private String _refRealtimeTableName;
+  private TimeBoundaryConfig _timeBoundaryConfig;
+
 
   public LogicalTableConfigBuilder setTableName(String tableName) {
     _tableName = tableName;
@@ -43,11 +52,41 @@ public class LogicalTableConfigBuilder {
     return this;
   }
 
+  public LogicalTableConfigBuilder setQueryConfig(QueryConfig queryConfig) {
+    _queryConfig = queryConfig;
+    return this;
+  }
+
+  public LogicalTableConfigBuilder setQuotaConfig(QuotaConfig quotaConfig) {
+    _quotaConfig = quotaConfig;
+    return this;
+  }
+
+  public LogicalTableConfigBuilder setRefOfflineTableName(String refOfflineTableName) {
+    _refOfflineTableName = refOfflineTableName;
+    return this;
+  }
+
+  public LogicalTableConfigBuilder setRefRealtimeTableName(String refRealtimeTableName) {
+    _refRealtimeTableName = refRealtimeTableName;
+    return this;
+  }
+
+  public LogicalTableConfigBuilder setTimeBoundaryConfig(TimeBoundaryConfig timeBoundaryConfig) {
+    _timeBoundaryConfig = timeBoundaryConfig;
+    return this;
+  }
+
   public LogicalTableConfig build() {
     LogicalTableConfig logicalTableConfig = new LogicalTableConfig();
     logicalTableConfig.setTableName(_tableName);
     logicalTableConfig.setPhysicalTableConfigMap(_physicalTableConfigMap);
     logicalTableConfig.setBrokerTenant(_brokerTenant);
+    logicalTableConfig.setQueryConfig(_queryConfig);
+    logicalTableConfig.setQuotaConfig(_quotaConfig);
+    logicalTableConfig.setRefOfflineTableName(_refOfflineTableName);
+    logicalTableConfig.setRefRealtimeTableName(_refRealtimeTableName);
+    logicalTableConfig.setTimeBoundaryConfig(_timeBoundaryConfig);
     return logicalTableConfig;
   }
 }

@@ -76,7 +76,10 @@ import org.mockito.Mockito;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertThrows;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.expectThrows;
 
 
 /**
@@ -1693,10 +1696,10 @@ public class TableConfigUtilsTest {
   public void testValidateDedupConfig() {
     Schema schema =
         new Schema.SchemaBuilder().setSchemaName(TABLE_NAME).addSingleValueDimension("myCol", FieldSpec.DataType.STRING)
-            .build();
-    TableConfig tableConfig = new TableConfigBuilder(TableType.OFFLINE).setTableName(TABLE_NAME)
-        .setDedupConfig(new DedupConfig())
-        .build();
+            .addDateTime(TIME_COLUMN, FieldSpec.DataType.LONG, "1:MILLISECONDS:EPOCH", "1:MILLISECONDS").build();
+    TableConfig tableConfig =
+        new TableConfigBuilder(TableType.OFFLINE).setTableName(TABLE_NAME).setTimeColumnName(TIME_COLUMN)
+            .setDedupConfig(new DedupConfig()).build();
     try {
       TableConfigUtils.validateUpsertAndDedupConfig(tableConfig, schema);
       Assert.fail();
@@ -1754,13 +1757,57 @@ public class TableConfigUtilsTest {
   }
 
   @Test
+  public void testValidateInvalidDedupConfigs() {
+    // Invalid STRING time column
+    Schema schema =
+        new Schema.SchemaBuilder().setSchemaName(TABLE_NAME).addSingleValueDimension("myCol", FieldSpec.DataType.STRING)
+            .addDateTime(TIME_COLUMN, FieldSpec.DataType.STRING, "1:MILLISECONDS:EPOCH", "1:MILLISECONDS")
+            .setPrimaryKeyColumns(Lists.newArrayList("myCol")).build();
+
+    Map<String, String> streamConfigs = getStreamConfigs();
+    DedupConfig dedupConfig = new DedupConfig();
+    dedupConfig.setMetadataTTL(10);
+    TableConfig tableConfig =
+        new TableConfigBuilder(TableType.REALTIME).setTableName(TABLE_NAME).setDedupConfig(dedupConfig)
+            .setRoutingConfig(
+                new RoutingConfig(null, null, RoutingConfig.STRICT_REPLICA_GROUP_INSTANCE_SELECTOR_TYPE, false))
+            .setTimeColumnName(TIME_COLUMN).setStreamConfigs(streamConfigs).build();
+    try {
+      TableConfigUtils.validateUpsertAndDedupConfig(tableConfig, schema);
+      Assert.fail();
+    } catch (IllegalStateException e) {
+      Assert.assertEquals(e.getMessage(),
+          "MetadataTTL must have time column: timeColumn in numeric type, found: STRING");
+    }
+
+    // Invalid TIMESTAMP dedupTimeColumn
+    dedupConfig.setDedupTimeColumn(TIME_COLUMN);
+    schema =
+        new Schema.SchemaBuilder().setSchemaName(TABLE_NAME).addSingleValueDimension("myCol", FieldSpec.DataType.STRING)
+            .addDateTime(TIME_COLUMN, FieldSpec.DataType.TIMESTAMP, "1:MILLISECONDS:EPOCH", "1:MILLISECONDS")
+            .setPrimaryKeyColumns(Lists.newArrayList("myCol")).build();
+    tableConfig = new TableConfigBuilder(TableType.REALTIME).setTableName(TABLE_NAME).setDedupConfig(dedupConfig)
+        .setRoutingConfig(
+            new RoutingConfig(null, null, RoutingConfig.STRICT_REPLICA_GROUP_INSTANCE_SELECTOR_TYPE, false))
+        .setStreamConfigs(streamConfigs).build();
+    try {
+      TableConfigUtils.validateUpsertAndDedupConfig(tableConfig, schema);
+      Assert.fail();
+    } catch (IllegalStateException e) {
+      Assert.assertEquals(e.getMessage(),
+          "MetadataTTL must have dedupTimeColumn: timeColumn in numeric type, found: TIMESTAMP");
+    }
+  }
+
+  @Test
   public void testValidateUpsertConfig() {
     Schema schema =
         new Schema.SchemaBuilder().setSchemaName(TABLE_NAME).addSingleValueDimension("myCol", FieldSpec.DataType.STRING)
-            .build();
+            .addDateTime(TIME_COLUMN, FieldSpec.DataType.LONG, "1:MILLISECONDS:EPOCH", "1:MILLISECONDS").build();
     UpsertConfig upsertConfig = new UpsertConfig(UpsertConfig.Mode.FULL);
     TableConfig tableConfig =
-        new TableConfigBuilder(TableType.OFFLINE).setTableName(TABLE_NAME).setUpsertConfig(upsertConfig).build();
+        new TableConfigBuilder(TableType.OFFLINE).setTableName(TABLE_NAME).setUpsertConfig(upsertConfig)
+            .setTimeColumnName(TIME_COLUMN).build();
     try {
       TableConfigUtils.validateUpsertAndDedupConfig(tableConfig, schema);
       Assert.fail();
@@ -1964,12 +2011,13 @@ public class TableConfigUtilsTest {
 
     // upsert deleted-keys-ttl configs with no deleted column
     schema = new Schema.SchemaBuilder().setSchemaName(TABLE_NAME).setPrimaryKeyColumns(Lists.newArrayList("myPkCol"))
+        .addDateTime(TIME_COLUMN, FieldSpec.DataType.LONG, "1:MILLISECONDS:EPOCH", "1:MILLISECONDS")
         .addSingleValueDimension("myCol", FieldSpec.DataType.STRING)
         .addSingleValueDimension(delCol, FieldSpec.DataType.BOOLEAN).build();
     upsertConfig = new UpsertConfig(UpsertConfig.Mode.FULL);
     upsertConfig.setDeletedKeysTTL(3600);
     tableConfig = new TableConfigBuilder(TableType.REALTIME).setTableName(TABLE_NAME).setStreamConfigs(streamConfigs)
-        .setUpsertConfig(upsertConfig).setRoutingConfig(
+        .setTimeColumnName(TIME_COLUMN).setUpsertConfig(upsertConfig).setRoutingConfig(
             new RoutingConfig(null, null, RoutingConfig.STRICT_REPLICA_GROUP_INSTANCE_SELECTOR_TYPE, false)).build();
     try {
       TableConfigUtils.validateUpsertAndDedupConfig(tableConfig, schema);
@@ -2449,6 +2497,42 @@ public class TableConfigUtilsTest {
     } catch (IllegalStateException e) {
       // Expected
     }
+
+    // Invalid STRING time column
+    schema =
+        new Schema.SchemaBuilder().setSchemaName(TABLE_NAME).addSingleValueDimension("myCol", FieldSpec.DataType.STRING)
+            .addDateTime(TIME_COLUMN, FieldSpec.DataType.STRING, "1:MILLISECONDS:EPOCH", "1:MILLISECONDS")
+            .setPrimaryKeyColumns(Lists.newArrayList("myCol")).build();
+    upsertConfig = new UpsertConfig(UpsertConfig.Mode.FULL);
+    upsertConfig.setMetadataTTL(3600);
+    upsertConfig.setSnapshot(Enablement.ENABLE);
+   tableConfigWithInvalidTTLConfig =
+        new TableConfigBuilder(TableType.REALTIME).setTableName(TABLE_NAME).setTimeColumnName(TIME_COLUMN)
+            .setUpsertConfig(upsertConfig).build();
+    try {
+      TableConfigUtils.validateTTLForUpsertConfig(tableConfigWithInvalidTTLConfig, schema);
+      Assert.fail();
+    } catch (IllegalStateException e) {
+      // Expected
+    }
+
+    // Invalid TIMESTAMP time column
+    schema =
+        new Schema.SchemaBuilder().setSchemaName(TABLE_NAME).addSingleValueDimension("myCol", FieldSpec.DataType.STRING)
+            .addDateTime(TIME_COLUMN, FieldSpec.DataType.TIMESTAMP, "1:MILLISECONDS:EPOCH", "1:MILLISECONDS")
+            .setPrimaryKeyColumns(Lists.newArrayList("myCol")).build();
+    upsertConfig = new UpsertConfig(UpsertConfig.Mode.FULL);
+    upsertConfig.setMetadataTTL(3600);
+    upsertConfig.setSnapshot(Enablement.ENABLE);
+    tableConfigWithInvalidTTLConfig =
+        new TableConfigBuilder(TableType.REALTIME).setTableName(TABLE_NAME).setTimeColumnName(TIME_COLUMN)
+            .setUpsertConfig(upsertConfig).build();
+    try {
+      TableConfigUtils.validateTTLForUpsertConfig(tableConfigWithInvalidTTLConfig, schema);
+      Assert.fail();
+    } catch (IllegalStateException e) {
+      // Expected
+    }
   }
 
   @Test
@@ -2487,6 +2571,74 @@ public class TableConfigUtilsTest {
           + "and replicaGroupPartitionConfig are set");
     } catch (IllegalStateException ignored) {
     }
+  }
+
+  @Test
+  public void testValidateImplicitRealtimeTablePartitionSelectorConfigs() {
+    InstanceAssignmentConfig instanceAssignmentConfig = Mockito.mock(InstanceAssignmentConfig.class);
+    when(instanceAssignmentConfig.getPartitionSelector()).thenReturn(
+        InstanceAssignmentConfig.PartitionSelector.IMPLICIT_REALTIME_TABLE_PARTITION_SELECTOR);
+
+    TableConfig tableConfig = new TableConfigBuilder(TableType.OFFLINE).setTableName(TABLE_NAME)
+        .setInstanceAssignmentConfigMap(Map.of(InstancePartitionsType.CONSUMING.name(), instanceAssignmentConfig))
+        .build();
+    IllegalStateException e = expectThrows(IllegalStateException.class,
+        () -> TableConfigUtils.validateInstanceAssignmentConfigs(tableConfig));
+    assertTrue(
+        e.getMessage().contains("IMPLICIT_REALTIME_TABLE_PARTITION_SELECTOR can only be used for REALTIME tables"));
+
+    InstanceReplicaGroupPartitionConfig instanceReplicaGroupPartitionConfig =
+        Mockito.mock(InstanceReplicaGroupPartitionConfig.class);
+    when(instanceReplicaGroupPartitionConfig.isReplicaGroupBased()).thenReturn(true);
+    when(instanceAssignmentConfig.getReplicaGroupPartitionConfig()).thenReturn(instanceReplicaGroupPartitionConfig);
+    TableConfig tableConfig2 = new TableConfigBuilder(TableType.REALTIME).setTableName(TABLE_NAME)
+        .setInstanceAssignmentConfigMap(Map.of(InstancePartitionsType.COMPLETED.name(), instanceAssignmentConfig))
+        .build();
+    e = expectThrows(IllegalStateException.class,
+        () -> TableConfigUtils.validateInstanceAssignmentConfigs(tableConfig2));
+    assertTrue(e.getMessage()
+        .contains(
+            "IMPLICIT_REALTIME_TABLE_PARTITION_SELECTOR can only be used for CONSUMING instance partitions type"));
+
+    when(instanceReplicaGroupPartitionConfig.isReplicaGroupBased()).thenReturn(false);
+    when(instanceAssignmentConfig.getReplicaGroupPartitionConfig()).thenReturn(instanceReplicaGroupPartitionConfig);
+    TableConfig tableConfig3 = new TableConfigBuilder(TableType.REALTIME).setTableName(TABLE_NAME)
+        .setInstanceAssignmentConfigMap(Map.of(InstancePartitionsType.CONSUMING.name(), instanceAssignmentConfig))
+        .build();
+    e = expectThrows(IllegalStateException.class,
+        () -> TableConfigUtils.validateInstanceAssignmentConfigs(tableConfig3));
+    assertTrue(e.getMessage()
+        .contains(
+            "IMPLICIT_REALTIME_TABLE_PARTITION_SELECTOR can only be used with replica group based instance "
+                + "assignment"));
+
+    when(instanceReplicaGroupPartitionConfig.isReplicaGroupBased()).thenReturn(true);
+    when(instanceReplicaGroupPartitionConfig.getNumPartitions()).thenReturn(1);
+    TableConfig tableConfig4 = new TableConfigBuilder(TableType.REALTIME).setTableName(TABLE_NAME)
+        .setInstanceAssignmentConfigMap(Map.of(InstancePartitionsType.CONSUMING.name(), instanceAssignmentConfig))
+        .build();
+    e = expectThrows(IllegalStateException.class,
+        () -> TableConfigUtils.validateInstanceAssignmentConfigs(tableConfig4));
+    assertTrue(e.getMessage()
+        .contains("numPartitions should not be explicitly set when using IMPLICIT_REALTIME_TABLE_PARTITION_SELECTOR"));
+
+    when(instanceReplicaGroupPartitionConfig.isReplicaGroupBased()).thenReturn(true);
+    when(instanceReplicaGroupPartitionConfig.getNumPartitions()).thenReturn(0);
+    when(instanceReplicaGroupPartitionConfig.getNumInstancesPerPartition()).thenReturn(2);
+    TableConfig tableConfig5 = new TableConfigBuilder(TableType.REALTIME).setTableName(TABLE_NAME)
+        .setInstanceAssignmentConfigMap(Map.of(InstancePartitionsType.CONSUMING.name(), instanceAssignmentConfig))
+        .build();
+    e = expectThrows(IllegalStateException.class,
+        () -> TableConfigUtils.validateInstanceAssignmentConfigs(tableConfig5));
+    assertTrue(e.getMessage()
+        .contains("numInstancesPerPartition must be 1 when using IMPLICIT_REALTIME_TABLE_PARTITION_SELECTOR"));
+
+    when(instanceReplicaGroupPartitionConfig.getNumPartitions()).thenReturn(0);
+    when(instanceReplicaGroupPartitionConfig.getNumInstancesPerPartition()).thenReturn(0);
+    TableConfig tableConfig6 = new TableConfigBuilder(TableType.REALTIME).setTableName(TABLE_NAME)
+        .setInstanceAssignmentConfigMap(Map.of(InstancePartitionsType.CONSUMING.name(), instanceAssignmentConfig))
+        .build();
+    TableConfigUtils.validateInstanceAssignmentConfigs(tableConfig6);
   }
 
   private Map<String, String> getStreamConfigs() {

@@ -141,6 +141,14 @@ public class OfflineClusterIntegrationTest extends BaseClusterIntegrationTestSet
       new StarTreeIndexConfig(List.of("DestState"), null, List.of(AggregationFunctionColumnPair.COUNT_STAR_NAME), null,
           100);
   private static final String TEST_STAR_TREE_QUERY_2 = "SELECT COUNT(*) FROM mytable WHERE DestState = 'CA'";
+  private static final StarTreeIndexConfig STAR_TREE_INDEX_CONFIG_3 =
+      new StarTreeIndexConfig(List.of("Carrier", "NewInt", "DerivedAirTime"), null,
+          List.of(AggregationFunctionColumnPair.COUNT_STAR_NAME), null, 1);
+  private static final String TEST_STAR_TREE_QUERY_3 =
+      "SELECT COUNT(*) FROM mytable WHERE Carrier = 'UA' AND NewInt = 1 AND DerivedAirTime >= 2";
+  private static final String TEST_STAR_TREE_QUERY_3_REFERENCE =
+      "SELECT COUNT(*) FROM mytable WHERE Carrier = 'UA' AND AirTime >= 120";
+  private static final int EXPECTED_NUM_DOCS_SCANNED_STAR_TREE_QUERY_3 = 87;
 
   // For default columns test
   private static final String TEST_EXTRA_COLUMNS_QUERY = "SELECT COUNT(*) FROM mytable WHERE NewAddedIntMetric = 1";
@@ -1676,9 +1684,73 @@ public class OfflineClusterIntegrationTest extends BaseClusterIntegrationTestSet
     verifySingleValueResponse(postQuery(TEST_STAR_TREE_QUERY_1), firstQueryResult, numTotalDocs, firstQueryResult);
     verifySingleValueResponse(postQuery(TEST_STAR_TREE_QUERY_2), secondQueryResult, numTotalDocs, secondQueryResult);
 
+    // Add one default column, one derived column and a star-tree on new added columns without enabling dynamic
+    // star-tree creation and trigger reload. New columns should be added, but not the star-tree.
+    Schema schema = createSchema();
+    schema.addField(new DimensionFieldSpec("NewInt", DataType.INT, true, 1));
+    schema.addField(new DimensionFieldSpec("DerivedAirTime", DataType.INT, true));
+    updateSchema(schema);
+    indexingConfig.setStarTreeIndexConfigs(List.of(STAR_TREE_INDEX_CONFIG_3));
+    indexingConfig.setEnableDynamicStarTreeCreation(false);
+    List<TransformConfig> transformConfigs = List.of(new TransformConfig("DerivedAirTime", "AirTime / 60"));
+    IngestionConfig ingestionConfig = new IngestionConfig();
+    ingestionConfig.setTransformConfigs(transformConfigs);
+    tableConfig.setIngestionConfig(ingestionConfig);
+    updateTableConfig(tableConfig);
+    reloadAllSegments(TEST_STAR_TREE_QUERY_3, false, numTotalDocs);
+    int thirdQueryResult =
+        postQuery(TEST_STAR_TREE_QUERY_3_REFERENCE).get("resultTable").get("rows").get(0).get(0).asInt();
+    verifySingleValueResponse(postQuery(TEST_STAR_TREE_QUERY_3), thirdQueryResult, numTotalDocs, thirdQueryResult);
+
+    // Reload again should have no effect
+    reloadAllSegments(TEST_STAR_TREE_QUERY_3, false, numTotalDocs);
+    verifySingleValueResponse(postQuery(TEST_STAR_TREE_QUERY_3), thirdQueryResult, numTotalDocs, thirdQueryResult);
+
+    // Set enableDynamicStarTreeCreation to true and trigger reload
+    indexingConfig.setEnableDynamicStarTreeCreation(true);
+    updateTableConfig(tableConfig);
+    reloadAllSegments(TEST_STAR_TREE_QUERY_3, false, numTotalDocs);
+    verifySingleValueResponse(postQuery(TEST_STAR_TREE_QUERY_3), thirdQueryResult, numTotalDocs,
+        EXPECTED_NUM_DOCS_SCANNED_STAR_TREE_QUERY_3);
+
+    // Reload again should have no effect
+    reloadAllSegments(TEST_STAR_TREE_QUERY_3, false, numTotalDocs);
+    verifySingleValueResponse(postQuery(TEST_STAR_TREE_QUERY_3), thirdQueryResult, numTotalDocs,
+        EXPECTED_NUM_DOCS_SCANNED_STAR_TREE_QUERY_3);
+
+    // Remove the added columns and star-tree index. Need to force update the schema to remove the added columns.
+    indexingConfig.setStarTreeIndexConfigs(null);
+    tableConfig.setIngestionConfig(null);
+    updateTableConfig(tableConfig);
+    forceUpdateSchema(_schema);
+    reloadAllSegments(SELECT_STAR_QUERY, false, numTotalDocs);
+    assertEquals(postQuery(SELECT_STAR_QUERY).get("resultTable").get("dataSchema").get("columnNames").size(), 79);
+
+    // Add new columns and star-tree index with dynamic star-tree creation enabled and trigger reload
+    updateSchema(schema);
+    indexingConfig.setStarTreeIndexConfigs(List.of(STAR_TREE_INDEX_CONFIG_3));
+    tableConfig.setIngestionConfig(ingestionConfig);
+    updateTableConfig(tableConfig);
+    reloadAllSegments(TEST_STAR_TREE_QUERY_3, false, numTotalDocs);
+    verifySingleValueResponse(postQuery(TEST_STAR_TREE_QUERY_3), thirdQueryResult, numTotalDocs,
+        EXPECTED_NUM_DOCS_SCANNED_STAR_TREE_QUERY_3);
+
+    // Reload again should have no effect
+    reloadAllSegments(TEST_STAR_TREE_QUERY_3, false, numTotalDocs);
+    verifySingleValueResponse(postQuery(TEST_STAR_TREE_QUERY_3), thirdQueryResult, numTotalDocs,
+        EXPECTED_NUM_DOCS_SCANNED_STAR_TREE_QUERY_3);
+
+    // Remove the added columns and star-tree index. Need to force update the schema to remove the added columns.
+    indexingConfig.setStarTreeIndexConfigs(null);
+    tableConfig.setIngestionConfig(null);
+    updateTableConfig(tableConfig);
+    forceUpdateSchema(_schema);
+    reloadAllSegments(SELECT_STAR_QUERY, false, numTotalDocs);
+    assertEquals(postQuery(SELECT_STAR_QUERY).get("resultTable").get("dataSchema").get("columnNames").size(), 79);
+
     // Reset the table config and reload, should have no effect
     updateTableConfig(_tableConfig);
-    reloadAllSegments(TEST_STAR_TREE_QUERY_2, false, numTotalDocs);
+    reloadAllSegments(SELECT_STAR_QUERY, false, numTotalDocs);
     verifySingleValueResponse(postQuery(TEST_STAR_TREE_QUERY_1), firstQueryResult, numTotalDocs, firstQueryResult);
     verifySingleValueResponse(postQuery(TEST_STAR_TREE_QUERY_2), secondQueryResult, numTotalDocs, secondQueryResult);
   }
@@ -1954,9 +2026,7 @@ public class OfflineClusterIntegrationTest extends BaseClusterIntegrationTestSet
     h2Query = "SELECT COUNT(*) FROM mytable WHERE DaysSinceEpoch = 16343";
     testQuery(pinotQuery, h2Query);
 
-    pinotQuery = "SELECT COUNT(*) FROM mytable WHERE "
-        + (useMultiStageQueryEngine() ? "CAST(NewAddedDerivedTimestamp AS BIGINT)" : "NewAddedDerivedTimestamp")
-        + " = 1411862400000";
+    pinotQuery = "SELECT COUNT(*) FROM mytable WHERE NewAddedDerivedTimestamp = 1411862400000";
     h2Query = "SELECT COUNT(*) FROM mytable WHERE DaysSinceEpoch = 16341";
     testQuery(pinotQuery, h2Query);
 
@@ -2149,6 +2219,55 @@ public class OfflineClusterIntegrationTest extends BaseClusterIntegrationTestSet
         throw new RuntimeException(e);
       }
     }, 60_000L, "Failed to remove expression override");
+  }
+
+  @Test(dataProvider = "useBothQueryEngines")
+  public void testInvisibleColumns(boolean useMultiStageQueryEngine)
+      throws Exception {
+    setUseMultiStageQueryEngine(useMultiStageQueryEngine);
+    long numTotalDocs = getCountStarResult();
+    TableConfig tableConfig = createOfflineTableConfig();
+    Schema schema = createSchema();
+
+    schema.addField(new MetricFieldSpec("$IntMetric", DataType.INT, 1));
+    schema.addField(new DateTimeFieldSpec("$DerivedTimestamp", DataType.TIMESTAMP, "TIMESTAMP", "1:DAYS"));
+    updateSchema(schema);
+
+    List<TransformConfig> transformConfigs =
+        List.of(new TransformConfig("$DerivedTimestamp", "DaysSinceEpoch * 24 * 3600 * 1000"));
+    IngestionConfig ingestionConfig = new IngestionConfig();
+    ingestionConfig.setTransformConfigs(transformConfigs);
+    tableConfig.setIngestionConfig(ingestionConfig);
+    updateTableConfig(tableConfig);
+
+    // Trigger reload and verify column count doesn't change in query but changes in segment metadata
+    reloadAllSegments(TEST_REGULAR_COLUMNS_QUERY, false, numTotalDocs);
+    assertEquals(postQuery(SELECT_STAR_QUERY).get("resultTable").get("dataSchema").get("columnNames").size(), 79);
+    JsonNode segmentsMetadata = JsonUtils.stringToJsonNode(
+        sendGetRequest(_controllerRequestURLBuilder.forSegmentsMetadataFromServer(getTableName(), List.of("*"))));
+    assertEquals(segmentsMetadata.size(), 12);
+    for (JsonNode segmentMetadata : segmentsMetadata) {
+      assertEquals(segmentMetadata.get("columns").size(), 81);
+    }
+
+    String pinotQuery = "SELECT COUNT(*) FROM mytable WHERE $IntMetric = 1 AND $DerivedTimestamp = 1411862400000";
+    String h2Query = "SELECT COUNT(*) FROM mytable WHERE DaysSinceEpoch = 16341";
+    testQuery(pinotQuery, h2Query);
+
+    // Reset the table config first to pass the validation
+    updateTableConfig(_tableConfig);
+
+    // Need to force update the schema because removing columns is backward-incompatible change
+    forceUpdateSchema(_schema);
+
+    reloadAllSegments(TEST_REGULAR_COLUMNS_QUERY, false, numTotalDocs);
+    assertEquals(postQuery(SELECT_STAR_QUERY).get("resultTable").get("dataSchema").get("columnNames").size(), 79);
+    segmentsMetadata = JsonUtils.stringToJsonNode(
+        sendGetRequest(_controllerRequestURLBuilder.forSegmentsMetadataFromServer(getTableName(), List.of("*"))));
+    assertEquals(segmentsMetadata.size(), 12);
+    for (JsonNode segmentMetadata : segmentsMetadata) {
+      assertEquals(segmentMetadata.get("columns").size(), 79);
+    }
   }
 
   @Test
@@ -3940,5 +4059,31 @@ public class OfflineClusterIntegrationTest extends BaseClusterIntegrationTestSet
     assertNoError(result);
 
     assertEquals(result.get("clientRequestId").asText(), clientRequestId);
+  }
+
+  @Test
+  public void testSegmentReload() {
+    try {
+      // Reload a single segment in the offline table
+      String segmentName = listSegments(DEFAULT_TABLE_NAME + "_OFFLINE").get(0);
+      String response = reloadOfflineSegment(DEFAULT_TABLE_NAME + "_OFFLINE", segmentName, true);
+      JsonNode responseJson = JsonUtils.stringToJsonNode(response);
+
+      // Single segment reload response: status is a string, parse manually
+      String statusString = responseJson.get("status").asText();
+      assertTrue(statusString.contains("SUCCESS"), "Segment reload failed: " + statusString);
+      int startIdx = statusString.indexOf("reload job id:") + "reload job id:".length();
+      int endIdx = statusString.indexOf(',', startIdx);
+      String jobId = statusString.substring(startIdx, endIdx).trim();
+      TestUtils.waitForCondition(aVoid -> {
+        try {
+          return isReloadJobCompleted(jobId);
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }, 600_000L, "Reload job did not complete in 10 minutes");
+    } catch (Exception e) {
+      fail("Segment reload failed with exception: " + e.getMessage());
+    }
   }
 }
