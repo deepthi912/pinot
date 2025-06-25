@@ -29,10 +29,17 @@ import org.apache.pinot.spi.plugin.PluginManager;
 import org.apache.pinot.tools.utils.AuthUtils;
 
 
-public class AuthQuickstart extends Quickstart {
+/**
+ * Quick start for Time Series Engine with authentication.
+ *
+ * To test this quick start, you can run the following command in pinot-tools/src/main/resources/scripts/timeseries/
+ * python3 run_ts_query.py --auth
+ */
+public class TimeSeriesEngineAuthQuickStart extends TimeSeriesEngineQuickStart {
+
   @Override
   public List<String> types() {
-    return Collections.singletonList("AUTH");
+    return Collections.singletonList("TIME_SERIES_AUTH");
   }
 
   @Override
@@ -43,14 +50,13 @@ public class AuthQuickstart extends Quickstart {
   @Override
   public Map<String, Object> getConfigOverrides() {
     Map<String, Object> properties = new HashMap<>(super.getConfigOverrides());
-    properties.put("pinot.broker.grpc.port", "8010");
     properties.putAll(AuthUtils.getAuthQuickStartDefaultConfigs());
     return properties;
   }
 
-  public static void main(String[] args)
-      throws Exception {
+  public static void main(String[] args) throws Exception {
     PluginManager.get().init();
-    new AuthQuickstart().execute();
+    new TimeSeriesEngineAuthQuickStart().execute();
+    printStatus(Color.GREEN, "Default login credential to login controller is admin/verysecret.");
   }
 }
