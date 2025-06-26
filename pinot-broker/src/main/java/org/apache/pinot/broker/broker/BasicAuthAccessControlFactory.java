@@ -21,20 +21,22 @@ package org.apache.pinot.broker.broker;
 import com.google.common.base.Preconditions;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import javax.validation.constraints.NotNull;
 import javax.ws.rs.NotAuthorizedException;
 import org.apache.pinot.broker.api.AccessControl;
-import org.apache.pinot.broker.api.HttpRequesterIdentity;
-import org.apache.pinot.broker.grpc.GrpcRequesterIdentity;
 import org.apache.pinot.common.request.BrokerRequest;
 import org.apache.pinot.core.auth.BasicAuthPrincipal;
 import org.apache.pinot.core.auth.BasicAuthUtils;
 import org.apache.pinot.spi.auth.AuthorizationResult;
 import org.apache.pinot.spi.auth.TableAuthorizationResult;
+import org.apache.pinot.spi.auth.TableRowColAccessResult;
+import org.apache.pinot.spi.auth.TableRowColAccessResultImpl;
 import org.apache.pinot.spi.auth.broker.RequesterIdentity;
 import org.apache.pinot.spi.env.PinotConfiguration;
 
@@ -52,8 +54,6 @@ import org.apache.pinot.spi.env.PinotConfiguration;
  */
 public class BasicAuthAccessControlFactory extends AccessControlFactory {
   private static final String PREFIX = "principals";
-
-  private static final String HEADER_AUTHORIZATION = "authorization";
 
   private AccessControl _accessControl;
 
@@ -136,26 +136,29 @@ public class BasicAuthAccessControlFactory extends AccessControlFactory {
       return new TableAuthorizationResult(failedTables);
     }
 
+    @Override
+    public TableRowColAccessResult getRowColFilters(RequesterIdentity requesterIdentity, @NotNull String table) {
+      Optional<BasicAuthPrincipal> principalOpt = getPrincipalOpt(requesterIdentity);
+
+      Preconditions.checkState(principalOpt.isPresent(), "Principal is not authorized");
+      Preconditions.checkState(table != null, "Table cannot be null");
+
+      TableRowColAccessResult tableRowColAccessResult = new TableRowColAccessResultImpl();
+      BasicAuthPrincipal principal = principalOpt.get();
+
+      //precondition: The principal should have the table.
+      Preconditions.checkArgument(principal.hasTable(table),
+          "Principal: " + principal.getName() + " does not have access to table: " + table);
+
+      Optional<List<String>> rlsFiltersMaybe = principal.getRLSFilters(table);
+      rlsFiltersMaybe.ifPresent(tableRowColAccessResult::setRLSFilters);
+
+      return tableRowColAccessResult;
+    }
+
     private Optional<BasicAuthPrincipal> getPrincipalOpt(RequesterIdentity requesterIdentity) {
-      Preconditions.checkArgument(
-          requesterIdentity instanceof HttpRequesterIdentity || requesterIdentity instanceof GrpcRequesterIdentity,
-          "BasicAuthAccessControl only supports HttpRequesterIdentity or GrpcRequesterIdentity, got %s",
-          requesterIdentity == null ? "null" : requesterIdentity.getClass().getName());
-      Collection<String> tokens = null;
-      if (requesterIdentity instanceof HttpRequesterIdentity) {
-        HttpRequesterIdentity identity = (HttpRequesterIdentity) requesterIdentity;
-        tokens = identity.getHttpHeaders().get(HEADER_AUTHORIZATION);
-      }
-      if (requesterIdentity instanceof GrpcRequesterIdentity) {
-        GrpcRequesterIdentity identity = (GrpcRequesterIdentity) requesterIdentity;
-        for (String key : identity.getMetadata().keySet()) {
-          if (HEADER_AUTHORIZATION.equalsIgnoreCase(key)) {
-            tokens = identity.getMetadata().get(key);
-            break;
-          }
-        }
-      }
-      if (tokens == null || tokens.isEmpty()) {
+      Collection<String> tokens = extractAuthorizationTokens(requesterIdentity);
+      if (tokens.isEmpty()) {
         return Optional.empty();
       }
       return tokens.stream().map(org.apache.pinot.common.auth.BasicAuthUtils::normalizeBase64Token)
