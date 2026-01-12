@@ -269,8 +269,8 @@ public class ConcurrentMapPartitionUpsertMetadataManager extends BasePartitionUp
     for (Map.Entry<Object, RecordLocation> obj : _previousKeyToRecordLocationMap.entrySet()) {
       IndexSegment prevSegment = obj.getValue().getSegment();
       RecordLocation currentLocation = _primaryKeyToRecordLocationMap.get(obj.getKey());
-      if (prevSegment != null) {
-        if (currentLocation != null && currentLocation.getSegment() == oldSegment) {
+      if (currentLocation != null && currentLocation.getSegment() == oldSegment) {
+        if (prevSegment != null) {
           try (UpsertUtils.RecordInfoReader recordInfoReader = new UpsertUtils.RecordInfoReader(prevSegment,
               _primaryKeyColumns, _comparisonColumns, _deleteRecordColumn)) {
             int newDocId = obj.getValue().getDocId();
@@ -282,9 +282,9 @@ public class ConcurrentMapPartitionUpsertMetadataManager extends BasePartitionUp
             throw new RuntimeException(e);
           }
           _primaryKeyToRecordLocationMap.put(obj.getKey(), obj.getValue());
+        } else {
+          _primaryKeyToRecordLocationMap.remove(obj.getKey());
         }
-      } else {
-        _primaryKeyToRecordLocationMap.remove(obj.getKey());
       }
     }
     _logger.info("Reverted Upsert metadata of {} keys to previous segment locations for the segment: {}",
