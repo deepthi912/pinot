@@ -277,6 +277,7 @@ public class ConcurrentMapPartitionUpsertMetadataManagerForConsistentDeletes
       if (entry.getValue().getSegment() == oldSegment) {
         _primaryKeyToRecordLocationMap.remove(entry.getKey());
         removeDocId(oldSegment, entry.getValue().getDocId());
+        _previousKeyToRecordLocationMap.remove(entry.getKey());
         removedKeys++;
       }
     }
@@ -390,8 +391,10 @@ public class ConcurrentMapPartitionUpsertMetadataManagerForConsistentDeletes
             throw new RuntimeException(e);
           }
           _primaryKeyToRecordLocationMap.put(obj.getKey(), obj.getValue());
+          _previousKeyToRecordLocationMap.remove(obj.getKey());
         } else {
           _primaryKeyToRecordLocationMap.remove(obj.getKey());
+          _previousKeyToRecordLocationMap.remove(obj.getKey());
         }
       }
     }

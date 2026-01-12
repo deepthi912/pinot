@@ -289,7 +289,11 @@ public abstract class BasePartitionUpsertMetadataManager implements PartitionUps
     }
     try {
       doAddSegment((ImmutableSegmentImpl) segment);
-      eraseKeyToPreviousLocationMap();
+      // Note: Do NOT call eraseKeyToPreviousLocationMap() here.
+      // addSegment() is called for offline segment pushes and segment loads at startup.
+      // Clearing _newlyAddedKeys here would erase tracking for any active consuming segment.
+      // eraseKeyToPreviousLocationMap() should only be called in replaceSegment() when
+      // a consuming segment is committed/replaced.
       _trackedSegments.add(segment);
       if (_enableSnapshot) {
         _updatedSegmentsSinceLastSnapshot.add(segment);
@@ -405,7 +409,10 @@ public abstract class BasePartitionUpsertMetadataManager implements PartitionUps
     }
     try {
       doPreloadSegment((ImmutableSegmentImpl) segment);
-      eraseKeyToPreviousLocationMap();
+      // Note: Do NOT call eraseKeyToPreviousLocationMap() here.
+      // preloadSegment() is called at startup when loading segments with snapshots.
+      // At this point there is no active consuming segment, and _newlyAddedKeys should be empty.
+      // eraseKeyToPreviousLocationMap() should only be called in replaceSegment().
       _trackedSegments.add(segment);
       _updatedSegmentsSinceLastSnapshot.add(segment);
     } finally {
@@ -573,7 +580,15 @@ public abstract class BasePartitionUpsertMetadataManager implements PartitionUps
     }
     try {
       doReplaceSegment(segment, oldSegment);
-      eraseKeyToPreviousLocationMap();
+      // Only erase the key tracking maps when replacing a consuming (mutable) segment.
+      // This happens during:
+      // 1. Local seal: consuming segment is sealed and replaced with built immutable segment
+      // 2. Downloaded replacement: consuming segment is replaced by segment downloaded from another server
+      // For immutable-to-immutable replacement (e.g., UpsertCompactionTask), we should NOT clear
+      // _newlyAddedKeys as it contains PKs from the active consuming segment.
+      if (oldSegment instanceof MutableSegment) {
+        eraseKeyToPreviousLocationMap();
+      }
       if (!(segment instanceof EmptyIndexSegment)) {
         _trackedSegments.add(segment);
         if (_enableSnapshot) {
