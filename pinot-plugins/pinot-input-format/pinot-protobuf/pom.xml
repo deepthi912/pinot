@@ -47,7 +47,6 @@
     <dependency>
       <groupId>com.github.os72</groupId>
       <artifactId>protobuf-dynamic</artifactId>
-      <version>${protobuf-dynamic.version}</version>
     </dependency>
   </dependencies>
   <build>
@@ -56,6 +55,7 @@
         <groupId>org.xolstice.maven.plugins</groupId>
         <artifactId>protobuf-maven-plugin</artifactId>
         <configuration>
+          <checkStaleness>true</checkStaleness>
           <protoTestSourceRoot>${basedir}/src/test/resources</protoTestSourceRoot>
         </configuration>
         <executions>

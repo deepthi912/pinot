@@ -654,6 +654,10 @@ public class CommonConstants {
         public static final String SKIP_UPSERT_VIEW = "skipUpsertView";
         public static final String UPSERT_VIEW_FRESHNESS_MS = "upsertViewFreshnessMs";
         public static final String USE_STAR_TREE = "useStarTree";
+        /**
+         * When true, use index-based distinct (JsonIndexDistinctOperator) when applicable.
+         */
+        public static final String USE_INDEX_BASED_DISTINCT_OPERATOR = "useIndexBasedDistinctOperator";
         public static final String SCAN_STAR_TREE_NODES = "scanStarTreeNodes";
         public static final String ROUTING_OPTIONS = "routingOptions";
         public static final String TABLE_SAMPLER = "sampler";
@@ -2183,15 +2187,14 @@ public class CommonConstants {
    */
   public static class ConfigChangeListenerConstants {
     /**
-     * Cluster config key to control whether force commit/reload is allowed for upsert tables
-     * with inconsistent state configurations (partial upsert or dropOutOfOrderRecord=true
-     * with consistency mode NONE and replication > 1).
+     * Cluster config key to control how to handle inconsistency during consuming segment commit
+     * for upsert/dedup tables (partial upsert or dropOutOfOrderRecord=true with consistency mode).
+     *
+     * Supported values:
+     * - RESTRICTED: Force commit is disabled for tables with inconsistent state table configurations
+     * - PROTECTED: Force commit is enabled with metadata reversion on inconsistencies
+     * - UNSAFE: Force commit is enabled without metadata reversion (Can lead to inconsistencies)
      */
-    public static final String FORCE_COMMIT_RELOAD_CONFIG = "pinot.server.upsert.force.commit.reload";
-
-    /**
-     * Default value: true (force commit/reload is allowed by default).
-     */
-    public static final boolean DEFAULT_FORCE_COMMIT_RELOAD = true;
+    public static final String CONSUMING_SEGMENT_CONSISTENCY_MODE = "pinot.server.consuming.segment.consistency.mode";
   }
 }

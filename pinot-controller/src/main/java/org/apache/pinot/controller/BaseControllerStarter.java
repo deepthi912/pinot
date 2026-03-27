@@ -135,7 +135,6 @@ import org.apache.pinot.controller.validation.ResourceUtilizationChecker;
 import org.apache.pinot.controller.validation.ResourceUtilizationManager;
 import org.apache.pinot.controller.validation.StorageQuotaChecker;
 import org.apache.pinot.controller.validation.UtilizationChecker;
-import org.apache.pinot.core.data.manager.realtime.UpsertInconsistentStateConfig;
 import org.apache.pinot.core.instance.context.ControllerContext;
 import org.apache.pinot.core.periodictask.PeriodicTask;
 import org.apache.pinot.core.periodictask.PeriodicTaskScheduler;
@@ -159,6 +158,7 @@ import org.apache.pinot.spi.services.ServiceRole;
 import org.apache.pinot.spi.services.ServiceStartable;
 import org.apache.pinot.spi.utils.CommonConstants;
 import org.apache.pinot.spi.utils.CommonConstants.Helix;
+import org.apache.pinot.spi.utils.ConsumingSegmentConsistencyModeListener;
 import org.apache.pinot.spi.utils.InstanceTypeUtils;
 import org.apache.pinot.spi.utils.NetUtils;
 import org.apache.pinot.spi.utils.PinotMd5Mode;
@@ -232,6 +232,7 @@ public abstract class BaseControllerStarter implements ServiceStartable {
   protected TableSizeReader _tableSizeReader;
   protected StorageQuotaChecker _storageQuotaChecker;
   protected final List<UtilizationChecker> _utilizationCheckers = new ArrayList<>();
+  protected ResourceUtilizationChecker _resourceUtilizationChecker;
   protected ResourceUtilizationManager _resourceUtilizationManager;
   protected RebalancePreChecker _rebalancePreChecker;
   protected TableRebalanceManager _tableRebalanceManager;
@@ -671,6 +672,11 @@ public abstract class BaseControllerStarter implements ServiceStartable {
         LOGGER.info("Registered {} as config change listener", controllerPeriodicTask.getTaskName());
       }
     }
+    // Register PinotLLCRealtimeSegmentManager before _adminApp.start() so that
+    // max.segment.completion.time.millis is seeded from cluster config before serving requests.
+    _clusterConfigChangeHandler.registerClusterConfigChangeListener(_pinotLLCRealtimeSegmentManager);
+    LOGGER.info("Registered PinotLLCRealtimeSegmentManager as cluster config change listener");
+
     LOGGER.info("Init controller periodic tasks scheduler");
     _periodicTaskScheduler = new PeriodicTaskScheduler();
     _periodicTaskScheduler.init(controllerPeriodicTasks);
@@ -766,10 +772,14 @@ public abstract class BaseControllerStarter implements ServiceStartable {
     });
 
     _serviceStatusCallbackList.add(generateServiceStatusCallback(_helixParticipantManager));
+    if (_config.isResourceUtilizationCheckerCollectUsageAtStartup()) {
+      _serviceStatusCallbackList.add(generateResourceUtilizationCheckerStatusCallback());
+    }
 
     _clusterConfigChangeHandler.registerClusterConfigChangeListener(ContinuousJfrStarter.INSTANCE);
-    _clusterConfigChangeHandler.registerClusterConfigChangeListener(UpsertInconsistentStateConfig.getInstance());
-    LOGGER.info("Registered UpsertInconsistentStateConfig as cluster config change listener");
+    _clusterConfigChangeHandler.registerClusterConfigChangeListener(
+        ConsumingSegmentConsistencyModeListener.getInstance());
+    LOGGER.info("Registered ConsumingSegmentConsistencyModeListener as cluster config change listener");
   }
 
   protected PinotLLCRealtimeSegmentManager createPinotLLCRealtimeSegmentManager() {
@@ -843,6 +853,31 @@ public abstract class BaseControllerStarter implements ServiceStartable {
           _statusDescription = ServiceStatus.STATUS_DESCRIPTION_NONE;
           return ServiceStatus.Status.GOOD;
         }
+      }
+
+      @Override
+      public String getStatusDescription() {
+        return _statusDescription;
+      }
+    };
+  }
+
+  /**
+   * Service status callback that waits for the resource utilization checker to fetch servers' resource information.
+   */
+  private ServiceStatus.ServiceStatusCallback generateResourceUtilizationCheckerStatusCallback() {
+    return new ServiceStatus.ServiceStatusCallback() {
+      private volatile String _statusDescription =
+          "Waiting for resource utilization checker to fetch servers' resource information";
+
+      @Override
+      public ServiceStatus.Status getServiceStatus() {
+        if (_resourceUtilizationChecker.hasCompletedAtLeastOnce()) {
+          _statusDescription = ServiceStatus.STATUS_DESCRIPTION_NONE;
+          return ServiceStatus.Status.GOOD;
+        }
+
+        return ServiceStatus.Status.STARTING;
       }
 
       @Override
@@ -1017,9 +1052,9 @@ public abstract class BaseControllerStarter implements ServiceStartable {
     PeriodicTask responseStoreCleaner = new ResponseStoreCleaner(_config, _helixResourceManager, _leadControllerManager,
         _controllerMetrics, _executorService, _connectionManager);
     periodicTasks.add(responseStoreCleaner);
-    PeriodicTask resourceUtilizationChecker = new ResourceUtilizationChecker(_config, _connectionManager,
+    _resourceUtilizationChecker = new ResourceUtilizationChecker(_config, _connectionManager,
         _controllerMetrics, _utilizationCheckers, _executorService, _helixResourceManager);
-    periodicTasks.add(resourceUtilizationChecker);
+    periodicTasks.add(_resourceUtilizationChecker);
     PeriodicTask tenantRebalanceChecker =
         new TenantRebalanceChecker(_config, _helixResourceManager, _tenantRebalancer);
     periodicTasks.add(tenantRebalanceChecker);

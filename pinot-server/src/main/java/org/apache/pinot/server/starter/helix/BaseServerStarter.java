@@ -84,13 +84,13 @@ import org.apache.pinot.core.common.datatable.DataTableBuilderFactory;
 import org.apache.pinot.core.data.manager.InstanceDataManager;
 import org.apache.pinot.core.data.manager.realtime.RealtimeConsumptionRateManager;
 import org.apache.pinot.core.data.manager.realtime.ServerRateLimitConfigChangeListener;
-import org.apache.pinot.core.data.manager.realtime.UpsertInconsistentStateConfig;
 import org.apache.pinot.core.instance.context.ServerContext;
 import org.apache.pinot.core.query.scheduler.resources.ResourceManager;
 import org.apache.pinot.core.transport.ListenerConfig;
 import org.apache.pinot.core.transport.NettyInspector;
 import org.apache.pinot.core.util.ListenerConfigUtil;
 import org.apache.pinot.core.util.trace.ContinuousJfrStarter;
+import org.apache.pinot.query.mailbox.MailboxService;
 import org.apache.pinot.query.runtime.KeepPipelineBreakerStatsPredicate;
 import org.apache.pinot.query.runtime.SendStatsPredicate;
 import org.apache.pinot.query.runtime.operator.factory.DefaultQueryOperatorFactoryProvider;
@@ -111,6 +111,7 @@ import org.apache.pinot.server.realtime.ControllerLeaderLocator;
 import org.apache.pinot.server.realtime.ServerSegmentCompletionProtocolHandler;
 import org.apache.pinot.server.starter.ServerInstance;
 import org.apache.pinot.server.starter.ServerQueriesDisabledTracker;
+import org.apache.pinot.server.worker.WorkerQueryServer;
 import org.apache.pinot.spi.accounting.ThreadAccountant;
 import org.apache.pinot.spi.accounting.ThreadAccountantUtils;
 import org.apache.pinot.spi.accounting.ThreadResourceUsageProvider;
@@ -132,6 +133,7 @@ import org.apache.pinot.spi.utils.CommonConstants.Helix.Instance;
 import org.apache.pinot.spi.utils.CommonConstants.Helix.StateModel;
 import org.apache.pinot.spi.utils.CommonConstants.Server;
 import org.apache.pinot.spi.utils.CommonConstants.Server.SegmentCompletionProtocol;
+import org.apache.pinot.spi.utils.ConsumingSegmentConsistencyModeListener;
 import org.apache.pinot.spi.utils.InstanceTypeUtils;
 import org.apache.pinot.spi.utils.NetUtils;
 import org.apache.pinot.spi.utils.PinotMd5Mode;
@@ -287,8 +289,9 @@ public abstract class BaseServerStarter implements ServiceStartable {
     LOGGER.info("Registered ClusterConfigForTable change listener");
     // Register configuration change listener for upsert force commit/reload disable setting
     _clusterConfigChangeHandler.registerClusterConfigChangeListener(
-        UpsertInconsistentStateConfig.getInstance());
-    LOGGER.info("Registered UpsertInconsistentStateConfig change listener for dynamic force commit/reload control");
+        ConsumingSegmentConsistencyModeListener.getInstance());
+    LOGGER.info(
+        "Registered ConsumingSegmentConsistencyModeListener change listener for dynamic force commit/reload control");
 
     LOGGER.info("Initializing Helix manager with zkAddress: {}, clusterName: {}, instanceId: {}", _zkAddress,
         _helixClusterName, _instanceId);
@@ -808,6 +811,21 @@ public abstract class BaseServerStarter implements ServiceStartable {
       } catch (Exception e) {
         LOGGER.error("Failed to register SendStatsPredicate as the Helix InstanceConfigChangeListener", e);
       }
+    }
+
+    // Register handler to reset GRPC mailbox channel backoff when servers come online
+    WorkerQueryServer workerQueryServer = _serverInstance.getWorkerQueryServer();
+    if (workerQueryServer != null) {
+      MailboxService mailboxService = workerQueryServer.getQueryRunner().getMailboxService();
+      LOGGER.info("Registering ServerGrpcChannelBackoffResetHandler");
+      try {
+        _helixManager.addInstanceConfigChangeListener(
+            new ServerGrpcChannelBackoffResetHandler(_helixAdmin, _helixClusterName, _instanceId, mailboxService));
+      } catch (Exception e) {
+        LOGGER.error("Failed to register ServerGrpcChannelBackoffResetHandler", e);
+      }
+    } else {
+      LOGGER.info("Multi-stage query engine not enabled, skipping ServerGrpcChannelBackoffResetHandler registration");
     }
 
     // Start restlet server for admin API endpoint

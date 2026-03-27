@@ -253,6 +253,8 @@ public class ControllerConf extends PinotConfiguration {
         "controller.segment.level.validation.intervalPeriod";
     public static final String AUTO_RESET_ERROR_SEGMENTS_VALIDATION =
         "controller.segment.error.autoReset";
+    public static final String ENABLE_PARTIAL_OFFLINE_REPLICA_REPAIR =
+        "controller.realtime.segment.partialOfflineReplicaRepairEnabled";
     public static final String DISASTER_RECOVERY_MODE_CONFIG_KEY = "controller.segment.disaster.recovery.mode";
 
     // Initial delays
@@ -384,6 +386,10 @@ public class ControllerConf extends PinotConfiguration {
       "controller.resource.utilization.checker.initial.delay";
   public static final String RESOURCE_UTILIZATION_CHECKER_FREQUENCY =
       "controller.resource.utilization.checker.frequency";
+  // Wait for the resource utilization checker to collect resource usage during controller startup, before marking
+  // the controller as ready. When enabled, controller.resource.utilization.checker.initial.delay is set to 0.
+  public static final String RESOURCE_UTILIZATION_CHECKER_COLLECT_USAGE_AT_STARTUP =
+      "controller.resource.utilization.checker.collect.usage.at.startup";
   public static final String ENABLE_BATCH_MESSAGE_MODE = "controller.enable.batch.message.mode";
   public static final String ENABLE_HYBRID_TABLE_RETENTION_STRATEGY =
       "controller.enable.hybrid.table.retention.strategy";
@@ -419,6 +425,7 @@ public class ControllerConf extends PinotConfiguration {
   public static final boolean DEFAULT_ENABLE_DISK_UTILIZATION_CHECKER = false;
   public static final long DEFAULT_RESOURCE_UTILIZATION_CHECKER_INITIAL_DELAY = 300L; // 5 minutes
   public static final long DEFAULT_RESOURCE_UTILIZATION_CHECKER_FREQUENCY = 300L; // 5 minutes
+  public static final boolean DEFAULT_RESOURCE_UTILIZATION_CHECKER_COLLECT_USAGE_AT_STARTUP = false;
   public static final boolean DEFAULT_ENABLE_BATCH_MESSAGE_MODE = false;
   public static final boolean DEFAULT_ENABLE_HYBRID_TABLE_RETENTION_STRATEGY = false;
   public static final String DEFAULT_CONTROLLER_MODE = ControllerMode.DUAL.name();
@@ -1141,11 +1148,17 @@ public class ControllerConf extends PinotConfiguration {
   }
 
   public long getResourceUtilizationCheckerInitialDelay() {
-    return getProperty(RESOURCE_UTILIZATION_CHECKER_INITIAL_DELAY, DEFAULT_RESOURCE_UTILIZATION_CHECKER_INITIAL_DELAY);
+    return isResourceUtilizationCheckerCollectUsageAtStartup() ? 0L
+        : getProperty(RESOURCE_UTILIZATION_CHECKER_INITIAL_DELAY, DEFAULT_RESOURCE_UTILIZATION_CHECKER_INITIAL_DELAY);
   }
 
   public long getResourceUtilizationCheckerFrequency() {
     return getProperty(RESOURCE_UTILIZATION_CHECKER_FREQUENCY, DEFAULT_RESOURCE_UTILIZATION_CHECKER_FREQUENCY);
+  }
+
+  public boolean isResourceUtilizationCheckerCollectUsageAtStartup() {
+    return getProperty(RESOURCE_UTILIZATION_CHECKER_COLLECT_USAGE_AT_STARTUP,
+        DEFAULT_RESOURCE_UTILIZATION_CHECKER_COLLECT_USAGE_AT_STARTUP);
   }
 
   public boolean isResourceUtilizationCheckEnabled() {
@@ -1179,6 +1192,10 @@ public class ControllerConf extends PinotConfiguration {
 
   public boolean isAutoResetErrorSegmentsOnValidationEnabled() {
     return getProperty(ControllerPeriodicTasksConf.AUTO_RESET_ERROR_SEGMENTS_VALIDATION, true);
+  }
+
+  public boolean isPartialOfflineReplicaRepairEnabled() {
+    return getProperty(ControllerPeriodicTasksConf.ENABLE_PARTIAL_OFFLINE_REPLICA_REPAIR, false);
   }
 
   public DisasterRecoveryMode getDisasterRecoveryMode() {
