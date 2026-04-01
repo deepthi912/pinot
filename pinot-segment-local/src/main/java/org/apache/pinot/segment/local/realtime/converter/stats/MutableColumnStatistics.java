@@ -19,7 +19,6 @@
 package org.apache.pinot.segment.local.realtime.converter.stats;
 
 import com.google.common.base.Preconditions;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
@@ -30,7 +29,6 @@ import org.apache.pinot.segment.spi.index.mutable.MutableForwardIndex;
 import org.apache.pinot.segment.spi.index.reader.Dictionary;
 import org.apache.pinot.segment.spi.partition.PartitionFunction;
 import org.apache.pinot.spi.data.FieldSpec.DataType;
-import org.apache.pinot.spi.utils.BigDecimalUtils;
 
 
 /**
@@ -41,6 +39,7 @@ import org.apache.pinot.spi.utils.BigDecimalUtils;
 public class MutableColumnStatistics implements ColumnStatistics {
   private final DataSource _dataSource;
   private final int[] _sortedDocIdIterationOrder;
+  private final boolean _isSortedColumn;
 
   // NOTE: For new added columns during the ingestion, this will be constant value dictionary instead of mutable
   //       dictionary.
@@ -49,9 +48,11 @@ public class MutableColumnStatistics implements ColumnStatistics {
   private int _minElementLength = -1;
   private int _maxElementLength = -1;
 
-  public MutableColumnStatistics(DataSource dataSource, @Nullable int[] sortedDocIdIterationOrder) {
+  public MutableColumnStatistics(DataSource dataSource, @Nullable int[] sortedDocIdIterationOrder,
+      boolean isSortedColumn) {
     _dataSource = dataSource;
     _sortedDocIdIterationOrder = sortedDocIdIterationOrder;
+    _isSortedColumn = isSortedColumn;
     _dictionary = dataSource.getDictionary();
   }
 
@@ -96,42 +97,26 @@ public class MutableColumnStatistics implements ColumnStatistics {
     if (storedType.isFixedWidth()) {
       _minElementLength = storedType.size();
       _maxElementLength = storedType.size();
-      return;
-    }
-
-    // If the stored type is not fixed width, iterate over the dictionary to find the min/max element length
-    _minElementLength = Integer.MAX_VALUE;
-    _maxElementLength = 0;
-    int length = _dictionary.length();
-    switch (storedType) {
-      case BIG_DECIMAL:
-        for (int i = 0; i < length; i++) {
-          int elementLength = BigDecimalUtils.byteSize(_dictionary.getBigDecimalValue(i));
-          _minElementLength = Math.min(_minElementLength, elementLength);
-          _maxElementLength = Math.max(_maxElementLength, elementLength);
-        }
-        break;
-      case STRING:
-        for (int i = 0; i < length; i++) {
-          int elementLength = _dictionary.getStringValue(i).getBytes(StandardCharsets.UTF_8).length;
-          _minElementLength = Math.min(_minElementLength, elementLength);
-          _maxElementLength = Math.max(_maxElementLength, elementLength);
-        }
-        break;
-      case BYTES:
-        for (int i = 0; i < length; i++) {
-          int elementLength = _dictionary.getBytesValue(i).length;
-          _minElementLength = Math.min(_minElementLength, elementLength);
-          _maxElementLength = Math.max(_maxElementLength, elementLength);
-        }
-        break;
-      default:
-        throw new IllegalStateException("Unsupported stored type: " + storedType);
+    } else {
+      // If the stored type is not fixed width, iterate over the dictionary to find the min/max element length
+      _minElementLength = Integer.MAX_VALUE;
+      _maxElementLength = 0;
+      int length = _dictionary.length();
+      for (int i = 0; i < length; i++) {
+        int elementLength = _dictionary.getValueSize(i);
+        _minElementLength = Math.min(_minElementLength, elementLength);
+        _maxElementLength = Math.max(_maxElementLength, elementLength);
+      }
     }
   }
 
   @Override
   public boolean isSorted() {
+    // Sorted column is guaranteed to be sorted by construction — no scan needed
+    if (_isSortedColumn) {
+      return true;
+    }
+
     DataSourceMetadata dataSourceMetadata = _dataSource.getDataSourceMetadata();
 
     // Multi-valued column cannot be sorted

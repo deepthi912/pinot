@@ -60,7 +60,6 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>javacc-maven-plugin</artifactId>
-        <version>3.2.0</version>
         <executions>
           <execution>
             <id>javacc-m3ql</id>
@@ -92,6 +91,12 @@
       </activation>
       <properties>
         <shade.phase.prop>package</shade.phase.prop>
+      </properties>
+    </profile>
+    <profile>
+      <id>pinot-fastdev</id>
+      <properties>
+        <shade.phase.prop>none</shade.phase.prop>
       </properties>
     </profile>
   </profiles>
