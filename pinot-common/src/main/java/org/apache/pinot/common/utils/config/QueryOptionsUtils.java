@@ -350,6 +350,12 @@ public class QueryOptionsUtils {
     return checkedParseInt(QueryOptionKey.CHUNK_SIZE_EXTRACT_FINAL_RESULT, chunkSizeExtractFinalResultString, 1);
   }
 
+  @Nullable
+  public static Integer getStreamingGroupByFlushThreshold(Map<String, String> queryOptions) {
+    String value = queryOptions.get(QueryOptionKey.STREAMING_GROUP_BY_FLUSH_THRESHOLD);
+    return checkedParseIntNonNegative(QueryOptionKey.STREAMING_GROUP_BY_FLUSH_THRESHOLD, value);
+  }
+
   public static boolean isNullHandlingEnabled(Map<String, String> queryOptions) {
     return Boolean.parseBoolean(queryOptions.get(QueryOptionKey.ENABLE_NULL_HANDLING));
   }
@@ -633,6 +639,33 @@ public class QueryOptionsUtils {
   public static Integer getRegexDictSizeThreshold(Map<String, String> queryOptions) {
     String regexDictSizeThreshold = queryOptions.get(QueryOptionKey.REGEX_DICT_SIZE_THRESHOLD);
     return uncheckedParseInt(QueryOptionKey.REGEX_DICT_SIZE_THRESHOLD, regexDictSizeThreshold);
+  }
+
+  // --- Vector search query option accessors ---
+
+  /**
+   * Returns the configured nprobe value for IVF_FLAT vector search, or {@code null} if not set.
+   */
+  @Nullable
+  public static Integer getVectorNprobe(Map<String, String> queryOptions) {
+    String nprobe = queryOptions.get(QueryOptionKey.VECTOR_NPROBE);
+    return checkedParseIntPositive(QueryOptionKey.VECTOR_NPROBE, nprobe);
+  }
+
+  /**
+   * Returns whether exact rerank is enabled for vector search. Defaults to {@code false}.
+   */
+  public static boolean isVectorExactRerank(Map<String, String> queryOptions) {
+    return Boolean.parseBoolean(queryOptions.get(QueryOptionKey.VECTOR_EXACT_RERANK));
+  }
+
+  /**
+   * Returns the maximum number of ANN candidates for vector search, or {@code null} if not set.
+   */
+  @Nullable
+  public static Integer getVectorMaxCandidates(Map<String, String> queryOptions) {
+    String maxCandidates = queryOptions.get(QueryOptionKey.VECTOR_MAX_CANDIDATES);
+    return checkedParseIntPositive(QueryOptionKey.VECTOR_MAX_CANDIDATES, maxCandidates);
   }
 
   public static int getSortExchangeCopyThreshold(Map<String, String> options, int i) {

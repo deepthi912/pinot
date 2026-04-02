@@ -709,6 +709,9 @@ public class CommonConstants {
         /** Number of threads used in the final reduce at broker level. */
         public static final String CHUNK_SIZE_EXTRACT_FINAL_RESULT = "chunkSizeExtractFinalResult";
 
+        /// Flush threshold for streaming group-by on MSE leaf stages.
+        public static final String STREAMING_GROUP_BY_FLUSH_THRESHOLD = "streamingGroupByFlushThreshold";
+
         public static final String NUM_REPLICA_GROUPS_TO_QUERY = "numReplicaGroupsToQuery";
         public static final String ORDERED_PREFERRED_POOLS = "orderedPreferredPools";
         public static final String USE_FIXED_REPLICA = "useFixedReplica";
@@ -902,6 +905,20 @@ public class CommonConstants {
 
         /// Option to customize the value of [Broker#CONFIG_OF_SORT_EXCHANGE_COPY_THRESHOLD]
         public static final String SORT_EXCHANGE_COPY_THRESHOLD = "sortExchangeCopyThreshold";
+
+        // Vector search query options
+
+        /** Number of inverted-list probes for IVF_FLAT vector index. Higher values improve recall
+         *  at the cost of latency. Only relevant when the segment's vector index uses IVF_FLAT. */
+        public static final String VECTOR_NPROBE = "vectorNprobe";
+
+        /** When true, ANN results are re-scored using exact distance from the forward index and
+         *  re-sorted before returning top-K. Improves accuracy at the cost of latency. */
+        public static final String VECTOR_EXACT_RERANK = "vectorExactRerank";
+
+        /** Maximum number of ANN candidates to retrieve before applying exact rerank or final
+         *  top-K selection. Defaults to topK * 10 if not set. */
+        public static final String VECTOR_MAX_CANDIDATES = "vectorMaxCandidates";
       }
 
       public static class QueryOptionValue {
