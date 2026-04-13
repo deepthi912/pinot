@@ -26,12 +26,12 @@
     <groupId>org.apache</groupId>
     <artifactId>apache</artifactId>
     <version>37</version>
-    <relativePath/>
+    <relativePath />
   </parent>
 
   <groupId>org.apache.pinot</groupId>
   <artifactId>pinot</artifactId>
-  <version>1.5.0-SNAPSHOT</version>
+  <version>1.6.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>Pinot</name>
   <description>A realtime distributed OLAP datastore</description>
@@ -155,7 +155,7 @@
     <jersey.version>2.48</jersey.version>
     <hk2.version>2.6.1</hk2.version>
     <swagger.version>1.6.16</swagger.version>
-    <swagger-ui.version>5.32.1</swagger-ui.version>
+    <swagger-ui.version>5.32.2</swagger-ui.version>
     <hadoop.version>3.4.3</hadoop.version>
     <jsonpath.version>2.10.0</jsonpath.version>
     <jsonsmart.version>2.6.0</jsonsmart.version>
@@ -170,7 +170,7 @@
     <dropwizard-metrics.version>4.2.38</dropwizard-metrics.version>
     <snappy-java.version>1.1.10.8</snappy-java.version>
     <zstd-jni.version>1.5.7-7</zstd-jni.version>
-    <lz4-java.version>1.10.4</lz4-java.version>
+    <lz4-java.version>1.11.0</lz4-java.version>
     <libthrift.verion>0.22.0</libthrift.verion>
     <log4j.version>2.25.4</log4j.version>
     <slf4j.version>2.0.17</slf4j.version>
@@ -184,8 +184,8 @@
     <audienceannotations.version>0.15.1</audienceannotations.version>
     <clp-ffi.version>0.4.7</clp-ffi.version>
     <stax2-api.version>4.3.0</stax2-api.version>
-    <aws.sdk.version>2.42.28</aws.sdk.version>
-    <azure.sdk.version>1.3.5</azure.sdk.version>
+    <aws.sdk.version>2.42.32</aws.sdk.version>
+    <azure.sdk.version>1.3.6</azure.sdk.version>
     <azure.msal4j.version>1.24.0</azure.msal4j.version>
     <joda-time.version>2.14.1</joda-time.version>
     <janino.version>3.1.12</janino.version>
@@ -195,7 +195,7 @@
     <plexus-classworlds.version>2.10.0</plexus-classworlds.version>
     <protobuf-dynamic.version>1.0.1</protobuf-dynamic.version>
     <localstack-utils.version>0.2.23</localstack-utils.version>
-    <checker-qual.version>3.55.1</checker-qual.version>
+    <checker-qual.version>4.0.0</checker-qual.version>
     <groovy-all.version>2.4.21</groovy-all.version>
     <xml-apis.version>2.0.2</xml-apis.version>
     <roaring-bitmap.version>1.6.14</roaring-bitmap.version>
@@ -226,7 +226,7 @@
     <commons-compress.version>1.28.0</commons-compress.version>
     <commons-math3.version>3.6.1</commons-math3.version>
     <commons-csv.version>1.14.1</commons-csv.version>
-    <commons-configuration2.version>2.13.0</commons-configuration2.version>
+    <commons-configuration2.version>2.14.0</commons-configuration2.version>
     <commons-beanutils.version>1.11.0</commons-beanutils.version>
     <commons-io.version>2.21.0</commons-io.version>
     <commons-codec.version>1.21.0</commons-codec.version>
@@ -261,7 +261,7 @@
     <google.cloud.libraries.version>26.79.0</google.cloud.libraries.version>
     <google.auto-service.version>1.1.1</google.auto-service.version>
     <google.re2j.version>1.8</google.re2j.version>
-    <google.errorprone.version>2.48.0</google.errorprone.version>
+    <google.errorprone.version>2.49.0</google.errorprone.version>
     <google.j2objc.version>3.1</google.j2objc.version>
     <google.jsr305.version>3.0.2</google.jsr305.version>
 
@@ -283,7 +283,7 @@
 
     <!-- Solve conflicts and vulnerabilities -->
     <kerby.version>2.1.1</kerby.version>
-    <jline.version>4.0.10</jline.version>
+    <jline.version>4.0.12</jline.version>
     <wildfly.version>2.0.1</wildfly.version>
     <jettison.version>1.5.5</jettison.version>
     <nimbus-jose-jwt.version>10.9</nimbus-jose-jwt.version>
@@ -2251,7 +2251,7 @@
               <importOrder>
                 <order>,\#</order>
               </importOrder>
-              <removeUnusedImports/>
+              <removeUnusedImports />
             </java>
           </configuration>
         </plugin>
@@ -2390,7 +2390,7 @@
               <phase>validate</phase>
               <configuration>
                 <rules>
-                  <dependencyConvergence/>
+                  <dependencyConvergence />
                   <bannedDependencies>
                     <excludes>
                       <!-- Use org.slf4j:jcl-over-slf4j -->
@@ -2799,6 +2799,9 @@
                 <exclude>**/.classpath</exclude>
                 <exclude>.externalToolBuilders/**</exclude>
 
+                <!-- Knowledge base (not source code) -->
+                <exclude>kb/**</exclude>
+
                 <!-- GenAI Config files -->
                 <exclude>.claude/**</exclude>
                 <exclude>.codex/**</exclude>
@@ -2918,6 +2921,9 @@
             <exclude>**/.classpath</exclude>
             <exclude>.externalToolBuilders/**</exclude>
 
+            <!-- Knowledge base (not source code) -->
+            <exclude>kb/**</exclude>
+
             <!-- GenAI Config files -->
             <exclude>.claude/**</exclude>
             <exclude>.codex/**</exclude>
@@ -2991,9 +2997,9 @@
           <createDependencyReducedPom>false</createDependencyReducedPom>
           <transformers>
             <!-- See https://logging.apache.org/log4j/transform for details -->
-            <transformer implementation="org.apache.logging.log4j.maven.plugins.shade.transformer.Log4j2PluginCacheFileTransformer"/>
-            <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer"/>
-            <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+            <transformer implementation="org.apache.logging.log4j.maven.plugins.shade.transformer.Log4j2PluginCacheFileTransformer" />
+            <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer" />
+            <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
             <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
               <mainClass>${mainClass}</mainClass>
               <manifestEntries>
