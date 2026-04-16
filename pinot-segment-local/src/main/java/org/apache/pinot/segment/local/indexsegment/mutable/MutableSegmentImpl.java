@@ -87,6 +87,8 @@ import org.apache.pinot.segment.spi.index.FieldIndexConfigsUtil;
 import org.apache.pinot.segment.spi.index.IndexService;
 import org.apache.pinot.segment.spi.index.IndexType;
 import org.apache.pinot.segment.spi.index.StandardIndexes;
+import org.apache.pinot.segment.spi.index.VectorIndexConfigProvider;
+import org.apache.pinot.segment.spi.index.creator.VectorIndexConfig;
 import org.apache.pinot.segment.spi.index.metadata.SegmentMetadataImpl;
 import org.apache.pinot.segment.spi.index.multicolumntext.MultiColumnTextMetadata;
 import org.apache.pinot.segment.spi.index.mutable.MutableDictionary;
@@ -155,6 +157,7 @@ public class MutableSegmentImpl implements MutableSegment {
   private final String _partitionColumn;
   private final PartitionFunction _partitionFunction;
   private final int _mainPartitionId; // partition id designated for this consuming segment
+  private final boolean _dropRecordOnPartitionMismatch;
   private final boolean _defaultNullHandlingEnabled;
   private final File _consumerDir;
 
@@ -192,6 +195,8 @@ public class MutableSegmentImpl implements MutableSegment {
   private volatile long _lastIndexedTimeMs = Long.MIN_VALUE;
   private volatile long _latestIngestionTimeMs = Long.MIN_VALUE;
   private volatile long _minimumIngestionLagMs = Long.MAX_VALUE;
+
+  private final boolean _hasColumnWithReuseMutableTextIndex;
 
   // multi-column text index fields
   private final MultiColumnRealtimeLuceneTextIndex _multiColumnTextIndex;
@@ -248,6 +253,7 @@ public class MutableSegmentImpl implements MutableSegment {
     _partitionColumn = config.getPartitionColumn();
     _partitionFunction = config.getPartitionFunction();
     _mainPartitionId = config.getPartitionId();
+    _dropRecordOnPartitionMismatch = config.isDropRecordOnPartitionMismatch();
     _defaultNullHandlingEnabled = config.isNullHandlingEnabled();
     _consumerDir = new File(config.getConsumerDir());
 
@@ -298,6 +304,7 @@ public class MutableSegmentImpl implements MutableSegment {
             StandardIndexes.nullValueVector()); // null value vector implements other contract
 
     // Initialize for each column
+    boolean hasColumnWithReuseMutableTextIndex = false;
     for (FieldSpec fieldSpec : _physicalFieldSpecs) {
       String column = fieldSpec.getName();
 
@@ -388,7 +395,8 @@ public class MutableSegmentImpl implements MutableSegment {
         nullValueVector = null;
       }
 
-      Map<IndexType, MutableIndex> mutableIndexes = new HashMap<>();
+      Map<IndexType, MutableIndex> mutableIndexes =
+          new MutableIndexes(indexConfigs.getConfig(StandardIndexes.vector()));
       for (IndexType<?, ?, ?> indexType : IndexService.getInstance().getAllIndexes()) {
         if (!specialIndexes.contains(indexType)) {
           addMutableIndex(mutableIndexes, indexType, context, indexConfigs);
@@ -404,15 +412,18 @@ public class MutableSegmentImpl implements MutableSegment {
       // If the raw value is provided, use it for the forward/dictionary index of this column by wrapping the
       // already created MutableIndex with a SameValue implementation. This optimization can only be done when
       // the mutable index is being reused
-      Object rawValueForTextIndex = indexConfigs.getConfig(StandardIndexes.text()).getRawValueForTextIndex();
       boolean reuseMutableIndex = indexConfigs.getConfig(StandardIndexes.text()).isReuseMutableIndex();
-      if (rawValueForTextIndex != null && reuseMutableIndex) {
-        if (dictionary == null) {
-          MutableIndex forwardIndex = mutableIndexes.get(StandardIndexes.forward());
-          mutableIndexes.put(StandardIndexes.forward(),
-              new SameValueMutableForwardIndex(rawValueForTextIndex, (MutableForwardIndex) forwardIndex));
-        } else {
-          dictionary = new SameValueMutableDictionary(rawValueForTextIndex, dictionary);
+      if (reuseMutableIndex) {
+        hasColumnWithReuseMutableTextIndex = true;
+        Object rawValueForTextIndex = indexConfigs.getConfig(StandardIndexes.text()).getRawValueForTextIndex();
+        if (rawValueForTextIndex != null) {
+          if (dictionary == null) {
+            MutableIndex forwardIndex = mutableIndexes.get(StandardIndexes.forward());
+            mutableIndexes.put(StandardIndexes.forward(),
+                new SameValueMutableForwardIndex(rawValueForTextIndex, (MutableForwardIndex) forwardIndex));
+          } else {
+            dictionary = new SameValueMutableDictionary(rawValueForTextIndex, dictionary);
+          }
         }
       }
 
@@ -420,6 +431,7 @@ public class MutableSegmentImpl implements MutableSegment {
           new IndexContainer(fieldSpec, partitionFunction, partitions, new ValuesInfo(), mutableIndexes, dictionary,
               nullValueVector, sourceColumn, valueAggregator));
     }
+    _hasColumnWithReuseMutableTextIndex = hasColumnWithReuseMutableTextIndex;
 
     _partitionDedupMetadataManager = config.getPartitionDedupMetadataManager();
     _dedupTimeColumn =
@@ -624,8 +636,27 @@ public class MutableSegmentImpl implements MutableSegment {
   @Override
   public boolean index(GenericRow row, @Nullable StreamMessageMetadata metadata)
       throws IOException {
-    boolean canTakeMore;
-    int numDocsIndexed = _numDocsIndexed;
+    if (_partitionColumn != null) {
+      Object value = row.getValue(_partitionColumn);
+      Preconditions.checkState(value != null, "Failed to find value for partition column: %s", _partitionColumn);
+      IndexContainer indexContainer = _indexContainerMap.get(_partitionColumn);
+      String stringValue = indexContainer._fieldSpec.getDataType().toString(value);
+      int partition = _partitionFunction.getPartition(stringValue);
+      if (partition != _mainPartitionId) {
+        if (_serverMetrics != null) {
+          _serverMetrics.addMeteredTableValue(_realtimeTableName, ServerMeter.REALTIME_PARTITION_MISMATCH, 1);
+        }
+        if (_dropRecordOnPartitionMismatch) {
+          updateIndexedAndIngestionTime(metadata);
+          return true;
+        }
+        if (indexContainer._partitions.add(partition)) {
+          // for every partition other than mainPartitionId, log a warning once
+          _logger.warn("Found new partition: {} from partition column: {}, value: {}", partition, _partitionColumn,
+              stringValue);
+        }
+      }
+    }
 
     if (isDedupEnabled()) {
       DedupRecordInfo dedupRecordInfo = getDedupRecordInfo(row);
@@ -633,6 +664,7 @@ public class MutableSegmentImpl implements MutableSegment {
         if (_serverMetrics != null) {
           _serverMetrics.addMeteredTableValue(_realtimeTableName, ServerMeter.REALTIME_DEDUP_DROPPED, 1);
         }
+        updateIndexedAndIngestionTime(metadata);
         return true;
       }
     }
@@ -644,6 +676,8 @@ public class MutableSegmentImpl implements MutableSegment {
     // NOTE: We must do this before we index a single column to avoid partially indexing the row
     validateLengthOfMVColumns(row);
 
+    boolean canTakeMore;
+    int numDocsIndexed = _numDocsIndexed;
     if (isUpsertEnabled()) {
       RecordInfo recordInfo = getRecordInfo(row, numDocsIndexed);
       GenericRow updatedRow = _partitionUpsertMetadataManager.updateRecord(row, recordInfo);
@@ -704,13 +738,15 @@ public class MutableSegmentImpl implements MutableSegment {
       _numDocsIndexed = numDocsIndexed;
     }
 
-    // Update last indexed time and latest ingestion time
+    updateIndexedAndIngestionTime(metadata);
+    return canTakeMore;
+  }
+
+  private void updateIndexedAndIngestionTime(@Nullable StreamMessageMetadata metadata) {
     _lastIndexedTimeMs = System.currentTimeMillis();
     if (metadata != null) {
       updateIngestionTimestamp(metadata.getRecordIngestionTimeMs());
     }
-
-    return canTakeMore;
   }
 
   /**
@@ -901,23 +937,6 @@ public class MutableSegmentImpl implements MutableSegment {
       DataType dataType = fieldSpec.getDataType();
 
       if (fieldSpec.isSingleValueField()) {
-        // Check partitions
-        if (column.equals(_partitionColumn)) {
-          String stringValue = dataType.toString(value);
-          int partition = _partitionFunction.getPartition(stringValue);
-          if (partition != _mainPartitionId) {
-            if (indexContainer._partitions.add(partition)) {
-              // for every partition other than mainPartitionId, log a warning once
-              _logger.warn("Found new partition: {} from partition column: {}, value: {}", partition, column,
-                  stringValue);
-            }
-            // always emit a metric when a partition other than mainPartitionId is detected
-            if (_serverMetrics != null) {
-              _serverMetrics.addMeteredTableValue(_realtimeTableName, ServerMeter.REALTIME_PARTITION_MISMATCH, 1);
-            }
-          }
-        }
-
         // Update numValues info
         indexContainer._valuesInfo.updateSVNumValues();
 
@@ -1317,6 +1336,7 @@ public class MutableSegmentImpl implements MutableSegment {
     for (IndexContainer indexContainer : _indexContainerMap.values()) {
       indexContainer.close();
     }
+    _indexContainerMap.clear();
 
     if (_multiColumnTextIndex != null) {
       try {
@@ -1565,6 +1585,11 @@ public class MutableSegmentImpl implements MutableSegment {
     return !_indexCapacityThresholdBreached;
   }
 
+  /// Returns `true` when any column has re-use mutable text index enabled.
+  public boolean hasColumnWithReuseMutableTextIndex() {
+    return _hasColumnWithReuseMutableTextIndex;
+  }
+
   // NOTE: Okay for single-writer
   @SuppressWarnings("NonAtomicOperationOnVolatileField")
   private static class ValuesInfo {
@@ -1698,6 +1723,22 @@ public class MutableSegmentImpl implements MutableSegment {
       _mutableIndexes.forEach(closer::accept);
       closer.accept(StandardIndexes.dictionary(), _dictionary);
       closer.accept(StandardIndexes.nullValueVector(), _nullValueVector);
+    }
+  }
+
+  private static final class MutableIndexes extends HashMap<IndexType, MutableIndex>
+      implements VectorIndexConfigProvider {
+    @Nullable
+    private final VectorIndexConfig _vectorIndexConfig;
+
+    private MutableIndexes(@Nullable VectorIndexConfig vectorIndexConfig) {
+      _vectorIndexConfig = vectorIndexConfig != null && vectorIndexConfig.isEnabled() ? vectorIndexConfig : null;
+    }
+
+    @Nullable
+    @Override
+    public VectorIndexConfig getVectorIndexConfig() {
+      return _vectorIndexConfig;
     }
   }
 }

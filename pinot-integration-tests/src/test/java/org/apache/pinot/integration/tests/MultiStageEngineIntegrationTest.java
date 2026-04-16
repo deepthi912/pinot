@@ -1781,8 +1781,9 @@ public class MultiStageEngineIntegrationTest extends BaseClusterIntegrationTestS
   public void testValidateQueryApiSuccessfulQueries()
       throws Exception {
     JsonNode tableConfigsNode =
-        JsonUtils.stringToJsonNode(sendGetRequest(getControllerBaseApiUrl() + "/tables/mytable"));
-    JsonNode schemaNode = JsonUtils.stringToJsonNode(sendGetRequest(getControllerBaseApiUrl() + "/schemas/mytable"));
+        JsonUtils.stringToJsonNode(getOrCreateAdminClient().getTableClient().getTableConfig("mytable"));
+    JsonNode schemaNode =
+        JsonUtils.stringToJsonNode(getOrCreateAdminClient().getSchemaClient().getSchema("mytable"));
     List<String> successfulQueries = Arrays.asList("SELECT COUNT(*) FROM mytable",
         "SELECT DivAirportSeqIDs, COUNT(*) FROM mytable GROUP BY DivAirportSeqIDs",
         "SELECT DivAirportSeqIDs FROM mytable WHERE arrayToMV(DivAirportSeqIDs) > 0 LIMIT 10",
@@ -1830,8 +1831,9 @@ public class MultiStageEngineIntegrationTest extends BaseClusterIntegrationTestS
   public void testValidateQueryApiBatchMixedResults()
       throws Exception {
     JsonNode tableConfigsNode =
-        JsonUtils.stringToJsonNode(sendGetRequest(getControllerBaseApiUrl() + "/tables/mytable"));
-    JsonNode schemaNode = JsonUtils.stringToJsonNode(sendGetRequest(getControllerBaseApiUrl() + "/schemas/mytable"));
+        JsonUtils.stringToJsonNode(getOrCreateAdminClient().getTableClient().getTableConfig("mytable"));
+    JsonNode schemaNode =
+        JsonUtils.stringToJsonNode(getOrCreateAdminClient().getSchemaClient().getSchema("mytable"));
     List<String> mixedQueries = Arrays.asList("SELECT COUNT(*) FROM mytable", "SELECT invalidColumn FROM mytable",
         "SELECT DivAirportSeqIDs FROM mytable LIMIT 10", "SELECT * FROM nonExistentTable");
 
@@ -1877,8 +1879,9 @@ public class MultiStageEngineIntegrationTest extends BaseClusterIntegrationTestS
   public void testValidateQueryApiUnsuccessfulQueries()
       throws Exception {
     JsonNode tableConfigsNode =
-        JsonUtils.stringToJsonNode(sendGetRequest(getControllerBaseApiUrl() + "/tables/mytable"));
-    JsonNode schemaNode = JsonUtils.stringToJsonNode(sendGetRequest(getControllerBaseApiUrl() + "/schemas/mytable"));
+        JsonUtils.stringToJsonNode(getOrCreateAdminClient().getTableClient().getTableConfig("mytable"));
+    JsonNode schemaNode =
+        JsonUtils.stringToJsonNode(getOrCreateAdminClient().getSchemaClient().getSchema("mytable"));
 
     List<TableConfig> tableConfigs = new ArrayList<>();
     JsonNode offlineConfig = tableConfigsNode.get("OFFLINE");
@@ -2048,8 +2051,9 @@ public class MultiStageEngineIntegrationTest extends BaseClusterIntegrationTestS
   public void testValidateQueryApiWithIgnoreCaseOption()
       throws Exception {
     JsonNode tableConfigsNode =
-        JsonUtils.stringToJsonNode(sendGetRequest(getControllerBaseApiUrl() + "/tables/mytable"));
-    JsonNode schemaNode = JsonUtils.stringToJsonNode(sendGetRequest(getControllerBaseApiUrl() + "/schemas/mytable"));
+        JsonUtils.stringToJsonNode(getOrCreateAdminClient().getTableClient().getTableConfig("mytable"));
+    JsonNode schemaNode =
+        JsonUtils.stringToJsonNode(getOrCreateAdminClient().getSchemaClient().getSchema("mytable"));
 
     List<TableConfig> tableConfigs = new ArrayList<>();
     JsonNode offlineConfig = tableConfigsNode.get("OFFLINE");
@@ -2125,6 +2129,36 @@ public class MultiStageEngineIntegrationTest extends BaseClusterIntegrationTestS
     QueryAssert.assertThat(queryResult)
         .firstException()
         .hasErrorCode(errorCode);
+  }
+
+  /// Verifies that the streaming group-by feature produces correct results when the query option
+  /// streamingGroupByFlushThreshold is set. Compares streaming results against a baseline query without the option.
+  @Test
+  public void testStreamingGroupBy()
+      throws Exception {
+    // Baseline: normal group-by query
+    String baseQuery = "SELECT AirlineID, SUM(Distance), COUNT(*) FROM mytable GROUP BY AirlineID ORDER BY AirlineID";
+    JsonNode baselineResponse = postQuery(baseQuery);
+    JsonNode baselineRows = baselineResponse.get("resultTable").get("rows");
+    assertTrue(baselineRows.size() > 0, "Baseline query should return results");
+
+    // Streaming group-by with a low flush threshold to force multiple flushes
+    String streamingQuery = "SET streamingGroupByFlushThreshold = 5; "
+        + "SELECT AirlineID, SUM(Distance), COUNT(*) FROM mytable GROUP BY AirlineID ORDER BY AirlineID";
+    JsonNode streamingResponse = postQuery(streamingQuery);
+    JsonNode streamingRows = streamingResponse.get("resultTable").get("rows");
+
+    // Results should be identical
+    assertEquals(streamingRows.size(), baselineRows.size(),
+        "Streaming group-by should return same number of groups as baseline");
+    for (int i = 0; i < baselineRows.size(); i++) {
+      assertEquals(streamingRows.get(i).get(0).asLong(), baselineRows.get(i).get(0).asLong(),
+          "AirlineID mismatch at row " + i);
+      assertEquals(streamingRows.get(i).get(1).asDouble(), baselineRows.get(i).get(1).asDouble(), 0.01,
+          "SUM(Distance) mismatch at row " + i);
+      assertEquals(streamingRows.get(i).get(2).asLong(), baselineRows.get(i).get(2).asLong(),
+          "COUNT(*) mismatch at row " + i);
+    }
   }
 
   private JsonNode getQueryResultForDBTest(String column, String tableName, @Nullable String database,

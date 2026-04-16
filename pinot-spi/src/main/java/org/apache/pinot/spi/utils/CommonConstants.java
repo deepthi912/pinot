@@ -655,9 +655,17 @@ public class CommonConstants {
         public static final String UPSERT_VIEW_FRESHNESS_MS = "upsertViewFreshnessMs";
         public static final String USE_STAR_TREE = "useStarTree";
         /**
-         * When true, use index-based distinct (JsonIndexDistinctOperator) when applicable.
+         * When true, use index-based distinct operators when applicable. This enables both
+         * JsonIndexDistinctOperator (for JSON columns) and InvertedIndexDistinctOperator
+         * (for dictionary + inverted index columns with cost heuristic).
          */
         public static final String USE_INDEX_BASED_DISTINCT_OPERATOR = "useIndexBasedDistinctOperator";
+        /**
+         * Cost ratio for the inverted-index-based distinct heuristic. The inverted index path is chosen when
+         * dictionaryCardinality * costRatio <= filteredDocCount. Default is cardinality-dependent:
+         * 30 for dictCard <= 1K, 10 for dictCard <= 10K, 6 for dictCard > 10K.
+         */
+        public static final String INVERTED_INDEX_DISTINCT_COST_RATIO = "invertedIndexDistinctCostRatio";
         public static final String SCAN_STAR_TREE_NODES = "scanStarTreeNodes";
         public static final String ROUTING_OPTIONS = "routingOptions";
         public static final String TABLE_SAMPLER = "sampler";
@@ -708,6 +716,9 @@ public class CommonConstants {
 
         /** Number of threads used in the final reduce at broker level. */
         public static final String CHUNK_SIZE_EXTRACT_FINAL_RESULT = "chunkSizeExtractFinalResult";
+
+        /// Flush threshold for streaming group-by on MSE leaf stages.
+        public static final String STREAMING_GROUP_BY_FLUSH_THRESHOLD = "streamingGroupByFlushThreshold";
 
         public static final String NUM_REPLICA_GROUPS_TO_QUERY = "numReplicaGroupsToQuery";
         public static final String ORDERED_PREFERRED_POOLS = "orderedPreferredPools";
@@ -792,6 +803,15 @@ public class CommonConstants {
         // Handle JOIN Overflow
         public static final String MAX_ROWS_IN_JOIN = "maxRowsInJoin";
         public static final String JOIN_OVERFLOW_MODE = "joinOverflowMode";
+
+        // Early terminate DISTINCT queries based on wall-clock execution time on server
+        public static final String MAX_EXECUTION_TIME_MS_IN_DISTINCT = "maxExecutionTimeMsInDistinct";
+
+        // Handle DISTINCT early termination
+        // Early terminate after scanning this many rows, regardless of whether the DISTINCT limit is satisfied.
+        public static final String MAX_ROWS_IN_DISTINCT = "maxRowsInDistinct";
+        // Early terminate after seeing no new distinct keys for this many scanned rows.
+        public static final String MAX_ROWS_WITHOUT_CHANGE_IN_DISTINCT = "maxRowsWithoutChangeInDistinct";
 
         // Handle WINDOW Overflow
         public static final String MAX_ROWS_IN_WINDOW = "maxRowsInWindow";
@@ -893,6 +913,38 @@ public class CommonConstants {
 
         /// Option to customize the value of [Broker#CONFIG_OF_SORT_EXCHANGE_COPY_THRESHOLD]
         public static final String SORT_EXCHANGE_COPY_THRESHOLD = "sortExchangeCopyThreshold";
+
+        // Vector search query options
+
+        /** Number of inverted-list probes for IVF-based vector indexes. Higher values improve recall
+         *  at the cost of latency. Only relevant when the segment's vector index uses IVF_FLAT or IVF_PQ. */
+        public static final String VECTOR_NPROBE = "vectorNprobe";
+
+        /** When true, ANN results are re-scored using exact distance from the forward index and
+         *  re-sorted before returning top-K. Improves accuracy at the cost of latency. */
+        public static final String VECTOR_EXACT_RERANK = "vectorExactRerank";
+
+        /** Maximum number of ANN candidates to retrieve before applying exact rerank or final
+         *  top-K selection. Defaults to topK * 10 if not set. */
+        public static final String VECTOR_MAX_CANDIDATES = "vectorMaxCandidates";
+
+        /** Distance threshold for vector search. When set, only results within this distance are
+         *  returned. The threshold is compared against the raw distance value from the configured
+         *  distance function: EUCLIDEAN/L2 uses squared L2 (sum of squared diffs, no sqrt),
+         *  COSINE uses 1 - cosine_similarity, INNER_PRODUCT/DOT_PRODUCT uses negated dot product. */
+        public static final String VECTOR_DISTANCE_THRESHOLD = "vectorDistanceThreshold";
+
+        /** efSearch parameter for HNSW vector indexes. Higher values improve recall at the cost
+         *  of latency by allowing the graph search to visit more candidates. */
+        public static final String VECTOR_EF_SEARCH = "vectorEfSearch";
+
+        /** Controls whether HNSW uses relative-distance competitive checks during traversal.
+         *  Defaults to true. Setting false disables score-threshold pruning. */
+        public static final String VECTOR_USE_RELATIVE_DISTANCE = "vectorUseRelativeDistance";
+
+        /** Controls whether HNSW uses a bounded top-K collector queue. Defaults to true.
+         *  Setting false uses an unbounded per-query collector and requires vectorEfSearch. */
+        public static final String VECTOR_USE_BOUNDED_QUEUE = "vectorUseBoundedQueue";
       }
 
       public static class QueryOptionValue {
@@ -1651,6 +1703,7 @@ public class CommonConstants {
      */
     public static final String SEGMENT_RELOAD_JOB_SEGMENT_NAME = "segmentName";
     public static final String SEGMENT_RELOAD_JOB_INSTANCE_NAME = "instanceName";
+    public static final String SEGMENT_RELOAD_JOB_INSTANCE_TO_SEGMENTS_MAP = "instanceToSegmentsMap";
     // Force commit job ZK props
     public static final String CONSUMING_SEGMENTS_FORCE_COMMITTED_LIST = "segmentsForceCommitted";
     public static final String CONSUMING_SEGMENTS_YET_TO_BE_COMMITTED_LIST = "segmentsYetToBeCommitted";
