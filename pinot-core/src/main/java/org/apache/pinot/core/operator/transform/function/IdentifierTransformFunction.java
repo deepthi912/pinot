@@ -40,6 +40,10 @@ public class IdentifierTransformFunction implements TransformFunction {
 
   public IdentifierTransformFunction(String columnName, ColumnContext columnContext) {
     _columnName = columnName;
+    // Always expose the column's dictionary if one exists. Callers that read the forward index for dict
+    // ids (transformToDictIdsSV/MV) must additionally consult the column's forward-index encoding to
+    // decide whether dict-id reads are cheap (dict-encoded forward) or would force per-row
+    // Dictionary#indexOf lookups (RAW forward + shared dict).
     _dictionary = columnContext.getDictionary();
     _resultMetadata =
         new TransformResultMetadata(columnContext.getDataType(), columnContext.isSingleValue(), _dictionary != null);
