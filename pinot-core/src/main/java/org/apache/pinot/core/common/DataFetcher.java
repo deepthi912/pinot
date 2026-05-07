@@ -80,12 +80,7 @@ public class DataFetcher implements AutoCloseable {
     ForwardIndexReader<?> forwardIndexReader = dataSource.getForwardIndex();
     Preconditions.checkState(forwardIndexReader != null,
         "Forward index disabled for column: %s, cannot create DataFetcher!", column);
-    // A RAW forward index cannot serve dict ids cheaply even when a (shared) dictionary is on disk —
-    // looking up dict ids would require a per-row Dictionary#indexOf call. Drop the dictionary here so
-    // ColumnValueReader takes the raw-value paths uniformly; callers that genuinely need dict ids on a
-    // RAW + shared-dict column must read raw values and consult the dictionary directly.
-    Dictionary dictionary = forwardIndexReader.isDictionaryEncoded() ? dataSource.getDictionary() : null;
-    ColumnValueReader columnValueReader = new ColumnValueReader(forwardIndexReader, dictionary);
+    ColumnValueReader columnValueReader = new ColumnValueReader(forwardIndexReader, dataSource.getDictionary());
     _columnValueReaderMap.put(column, columnValueReader);
   }
 
