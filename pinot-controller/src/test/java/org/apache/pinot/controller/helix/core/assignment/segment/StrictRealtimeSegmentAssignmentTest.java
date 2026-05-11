@@ -479,7 +479,7 @@ public class StrictRealtimeSegmentAssignmentTest {
   }
 
   private static HelixManager createHelixManager() {
-    return createHelixManager(Collections.emptySet());
+    return createHelixManager(Set.of());
   }
 
   private static HelixManager createHelixManager(Set<String> tieredSegments) {

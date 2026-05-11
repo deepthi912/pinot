@@ -19,7 +19,6 @@
 package org.apache.pinot.controller.helix.core.assignment.segment;
 
 import com.google.common.base.Preconditions;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -90,13 +89,14 @@ public class MultiTierStrictRealtimeSegmentAssignment extends BaseStrictRealtime
   }
 
   /**
-   * Multi-tier override: pick the latest LLC segment in the partition (highest sequence number) and skip it if it has
-   * already been moved to a tier, since tiered segments live on a different instance pool than CONSUMING segments.
+   * Multi-tier override: pick the latest committed LLC segment in the partition (highest sequence number) and return
+   * its assignment only if the segment is still on the CONSUMING instance pool. If the latest segment has been moved
+   * to a tier (or its ZK metadata is unavailable), return {@code null} so the new CONSUMING segment falls back to the
+   * assignment derived from instance partitions.
    */
   @Nullable
   @Override
   protected Set<String> getExistingAssignment(int partitionId, Map<String, Map<String, String>> currentAssignment) {
-    List<String> uploadedSegments = new ArrayList<>();
     LLCSegmentName latestLLCSegmentName = null;
     Set<String> latestAssignment = null;
     for (Map.Entry<String, Map<String, String>> entry : currentAssignment.entrySet()) {
@@ -105,7 +105,6 @@ public class MultiTierStrictRealtimeSegmentAssignment extends BaseStrictRealtime
       }
       LLCSegmentName llcSegmentName = LLCSegmentName.of(entry.getKey());
       if (llcSegmentName == null) {
-        uploadedSegments.add(entry.getKey());
         continue;
       }
       if (llcSegmentName.getPartitionGroupId() == partitionId && (latestLLCSegmentName == null
@@ -114,22 +113,23 @@ public class MultiTierStrictRealtimeSegmentAssignment extends BaseStrictRealtime
         latestAssignment = entry.getValue().keySet();
       }
     }
-    if (latestAssignment != null) {
-      SegmentZKMetadata segmentZKMetadata =
-          ZKMetadataProvider.getSegmentZKMetadata(_helixManager.getHelixPropertyStore(), _tableNameWithType,
-              latestLLCSegmentName.getSegmentName());
-      if (segmentZKMetadata != null && segmentZKMetadata.getTier() != null) {
-        _logger.info("Latest segment: {} for partition: {} is on tier: {}, skipping existing assignment",
-            latestLLCSegmentName.getSegmentName(), partitionId, segmentZKMetadata.getTier());
-        return null;
-      }
-      return latestAssignment;
+    if (latestAssignment == null) {
+      return null;
     }
-    for (String uploadedSegment : uploadedSegments) {
-      if (getPartitionIdUsingCache(uploadedSegment) == partitionId) {
-        return currentAssignment.get(uploadedSegment).keySet();
-      }
+    String latestSegmentName = latestLLCSegmentName.getSegmentName();
+    SegmentZKMetadata segmentZKMetadata =
+        ZKMetadataProvider.getSegmentZKMetadata(_helixManager.getHelixPropertyStore(), _tableNameWithType,
+            latestSegmentName);
+    if (segmentZKMetadata == null) {
+      _logger.warn("Failed to find ZK metadata for latest segment: {} of partition: {}, skipping existing assignment",
+          latestSegmentName, partitionId);
+      return null;
     }
-    return null;
+    if (segmentZKMetadata.getTier() != null) {
+      _logger.warn("Latest segment: {} for partition: {} is on tier: {}, skipping existing assignment",
+          latestSegmentName, partitionId, segmentZKMetadata.getTier());
+      return null;
+    }
+    return latestAssignment;
   }
 }
