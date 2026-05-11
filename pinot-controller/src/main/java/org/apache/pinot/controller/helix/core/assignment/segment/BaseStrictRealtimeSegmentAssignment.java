@@ -26,8 +26,6 @@ import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
 import org.apache.pinot.common.assignment.InstancePartitions;
-import org.apache.pinot.common.metadata.ZKMetadataProvider;
-import org.apache.pinot.common.metadata.segment.SegmentZKMetadata;
 import org.apache.pinot.common.metrics.ControllerMeter;
 import org.apache.pinot.common.utils.LLCSegmentName;
 import org.apache.pinot.common.utils.SegmentUtils;
@@ -105,10 +103,8 @@ public abstract class BaseStrictRealtimeSegmentAssignment extends RealtimeSegmen
    * partition. We try to derive the partition id from segment name to avoid ZK reads.
    */
   @Nullable
-  private Set<String> getExistingAssignment(int partitionId, Map<String, Map<String, String>> currentAssignment) {
+  protected Set<String> getExistingAssignment(int partitionId, Map<String, Map<String, String>> currentAssignment) {
     List<String> uploadedSegments = new ArrayList<>();
-    LLCSegmentName latestLLCSegmentName = null;
-    Set<String> latestAssignment = null;
     for (Map.Entry<String, Map<String, String>> entry : currentAssignment.entrySet()) {
       // Skip OFFLINE segments as they are not rebalanced, so their assignment in idealState can be stale.
       if (isOfflineSegment(entry.getValue())) {
@@ -120,25 +116,8 @@ public abstract class BaseStrictRealtimeSegmentAssignment extends RealtimeSegmen
         continue;
       }
       if (llcSegmentName.getPartitionGroupId() == partitionId) {
-        if (latestLLCSegmentName == null
-            || llcSegmentName.getSequenceNumber() > latestLLCSegmentName.getSequenceNumber()) {
-          latestLLCSegmentName = llcSegmentName;
-          latestAssignment = entry.getValue().keySet();
-        }
+        return entry.getValue().keySet();
       }
-    }
-    if (latestAssignment != null) {
-      // If the latest segment for the partition has been moved to a tier, it lives on a different instance pool than
-      // a new CONSUMING segment, so its assignment must not be reused.
-      SegmentZKMetadata segmentZKMetadata =
-          ZKMetadataProvider.getSegmentZKMetadata(_helixManager.getHelixPropertyStore(), _tableNameWithType,
-              latestLLCSegmentName.getSegmentName());
-      if (segmentZKMetadata != null && segmentZKMetadata.getTier() != null) {
-        _logger.info("Latest segment: {} for partition: {} is on tier: {}, skipping existing assignment",
-            latestLLCSegmentName.getSegmentName(), partitionId, segmentZKMetadata.getTier());
-        return null;
-      }
-      return latestAssignment;
     }
     // Check ZK metadata for uploaded segments to look for a segment that's in the same partition
     for (String uploadedSegment : uploadedSegments) {

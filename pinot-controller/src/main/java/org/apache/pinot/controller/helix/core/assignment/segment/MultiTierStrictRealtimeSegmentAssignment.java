@@ -19,15 +19,20 @@
 package org.apache.pinot.controller.helix.core.assignment.segment;
 
 import com.google.common.base.Preconditions;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import javax.annotation.Nullable;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.pinot.common.assignment.InstancePartitions;
+import org.apache.pinot.common.metadata.ZKMetadataProvider;
+import org.apache.pinot.common.metadata.segment.SegmentZKMetadata;
 import org.apache.pinot.common.restlet.resources.RebalanceConfig;
 import org.apache.pinot.common.tier.Tier;
+import org.apache.pinot.common.utils.LLCSegmentName;
 import org.apache.pinot.spi.config.table.assignment.InstancePartitionsType;
 import org.apache.pinot.spi.utils.CommonConstants;
 
@@ -82,5 +87,49 @@ public class MultiTierStrictRealtimeSegmentAssignment extends BaseStrictRealtime
     _logger.info("Rebalanced table: {}, number of segments to be added/removed for each instance: {}",
         _tableNameWithType, SegmentAssignmentUtils.getNumSegmentsToMovePerInstance(currentAssignment, newAssignment));
     return newAssignment;
+  }
+
+  /**
+   * Multi-tier override: pick the latest LLC segment in the partition (highest sequence number) and skip it if it has
+   * already been moved to a tier, since tiered segments live on a different instance pool than CONSUMING segments.
+   */
+  @Nullable
+  @Override
+  protected Set<String> getExistingAssignment(int partitionId, Map<String, Map<String, String>> currentAssignment) {
+    List<String> uploadedSegments = new ArrayList<>();
+    LLCSegmentName latestLLCSegmentName = null;
+    Set<String> latestAssignment = null;
+    for (Map.Entry<String, Map<String, String>> entry : currentAssignment.entrySet()) {
+      if (isOfflineSegment(entry.getValue())) {
+        continue;
+      }
+      LLCSegmentName llcSegmentName = LLCSegmentName.of(entry.getKey());
+      if (llcSegmentName == null) {
+        uploadedSegments.add(entry.getKey());
+        continue;
+      }
+      if (llcSegmentName.getPartitionGroupId() == partitionId && (latestLLCSegmentName == null
+          || llcSegmentName.getSequenceNumber() > latestLLCSegmentName.getSequenceNumber())) {
+        latestLLCSegmentName = llcSegmentName;
+        latestAssignment = entry.getValue().keySet();
+      }
+    }
+    if (latestAssignment != null) {
+      SegmentZKMetadata segmentZKMetadata =
+          ZKMetadataProvider.getSegmentZKMetadata(_helixManager.getHelixPropertyStore(), _tableNameWithType,
+              latestLLCSegmentName.getSegmentName());
+      if (segmentZKMetadata != null && segmentZKMetadata.getTier() != null) {
+        _logger.info("Latest segment: {} for partition: {} is on tier: {}, skipping existing assignment",
+            latestLLCSegmentName.getSegmentName(), partitionId, segmentZKMetadata.getTier());
+        return null;
+      }
+      return latestAssignment;
+    }
+    for (String uploadedSegment : uploadedSegments) {
+      if (getPartitionIdUsingCache(uploadedSegment) == partitionId) {
+        return currentAssignment.get(uploadedSegment).keySet();
+      }
+    }
+    return null;
   }
 }
