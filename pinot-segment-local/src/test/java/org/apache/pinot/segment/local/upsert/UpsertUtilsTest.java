@@ -31,8 +31,6 @@ import static org.testng.Assert.assertTrue;
 
 public class UpsertUtilsTest {
 
-  // -------- Non-consistency-mode segments: behavior unchanged. --------
-
   @Test
   public void testHasNoQueryableDocsLiveQueryableEmpty() {
     IndexSegment segment = mock(IndexSegment.class);
@@ -98,7 +96,7 @@ public class UpsertUtilsTest {
   }
 
   @Test
-  public void testHasNoQueryableDocsConsistencyModeSnapshotAbsentDefersToFalse() {
+  public void testHasNoQueryableDocsConsistencyModeSnapshotAbsent() {
     // Consistency mode on, but this segment is not in the current refresh (first refresh hasn't
     // run, or segment was just tracked). Live bitmap might disagree with the upcoming snapshot,
     // so do not claim empty.
