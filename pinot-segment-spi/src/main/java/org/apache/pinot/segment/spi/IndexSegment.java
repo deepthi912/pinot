@@ -29,6 +29,7 @@ import org.apache.pinot.segment.spi.index.startree.StarTreeV2;
 import org.apache.pinot.spi.annotations.InterfaceAudience;
 import org.apache.pinot.spi.data.Schema;
 import org.apache.pinot.spi.data.readers.GenericRow;
+import org.roaringbitmap.buffer.MutableRoaringBitmap;
 
 
 @InterfaceAudience.Private
@@ -105,6 +106,31 @@ public interface IndexSegment {
    */
   @Nullable
   ThreadSafeMutableRoaringBitmap getQueryableDocIds();
+
+  /**
+   * Returns the queryable doc-id bitmap from the upsert snapshot view if the table has consistency mode
+   * (SYNC or SNAPSHOT) enabled and this segment is included in the latest refresh; otherwise returns {@code null}.
+   *
+   * <p>Callers that need a consistent view across segments (e.g. query-time empty-segment pruning) should
+   * prefer this over {@link #getQueryableDocIds()}, which is the segment's live bitmap and can drift from the
+   * per-query snapshot between refreshes.
+   */
+  @Nullable
+  default MutableRoaringBitmap getQueryableDocIdsSnapshot() {
+    return null;
+  }
+
+  /**
+   * Returns {@code true} when this segment belongs to an upsert table whose consistency mode is
+   * {@code SYNC} or {@code SNAPSHOT}.
+   *
+   * <p>When this returns {@code true}, callers must not short-circuit decisions on the segment's live
+   * {@link #getValidDocIds()} / {@link #getQueryableDocIds()} bitmaps: the live bitmaps can diverge from
+   * the per-query snapshot maintained by the upsert view manager.
+   */
+  default boolean isUpsertConsistencyModeEnabled() {
+    return false;
+  }
 
   /**
    * Returns the record for the given document id. Virtual column values are not returned.

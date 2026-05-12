@@ -58,10 +58,25 @@ public class UpsertUtils {
   }
 
   /**
-   * Returns whether the segment has no queryable documents, when no delete record column we look into validDocIds
-   * for an upsert table
+   * Returns whether the segment has no queryable documents. Order of checks:
+   * <ol>
+   *   <li>If the segment exposes a queryable-doc-ids snapshot via {@link IndexSegment#getQueryableDocIdsSnapshot()}
+   *       (consistency-mode upsert tables), trust the snapshot — it matches the view the upcoming query will scan.</li>
+   *   <li>If the segment is in a consistency-mode upsert table but the snapshot is not yet populated for it
+   *       (first refresh hasn't run or this segment was just tracked), be conservative and report
+   *       {@code false} — the live bitmaps can diverge from the snapshot view.</li>
+   *   <li>Otherwise (non-consistency tables, or non-upsert tables), fall back to the segment's live
+   *       queryable bitmap, and to {@code validDocIds} when no delete-record column is configured.</li>
+   * </ol>
    */
   public static boolean hasNoQueryableDocs(IndexSegment segment) {
+    MutableRoaringBitmap snapshot = segment.getQueryableDocIdsSnapshot();
+    if (snapshot != null) {
+      return snapshot.isEmpty();
+    }
+    if (segment.isUpsertConsistencyModeEnabled()) {
+      return false;
+    }
     ThreadSafeMutableRoaringBitmap queryableDocIds = segment.getQueryableDocIds();
     if (queryableDocIds != null) {
       return queryableDocIds.isEmpty();

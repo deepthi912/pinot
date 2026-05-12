@@ -40,6 +40,7 @@ import org.apache.pinot.segment.local.segment.readers.PinotSegmentRecordReader;
 import org.apache.pinot.segment.local.segment.virtualcolumn.VirtualColumnContext;
 import org.apache.pinot.segment.local.startree.v2.store.StarTreeIndexContainer;
 import org.apache.pinot.segment.local.upsert.PartitionUpsertMetadataManager;
+import org.apache.pinot.segment.local.upsert.UpsertViewManager;
 import org.apache.pinot.segment.spi.ColumnMetadata;
 import org.apache.pinot.segment.spi.FetchContext;
 import org.apache.pinot.segment.spi.ImmutableSegment;
@@ -358,6 +359,22 @@ public class ImmutableSegmentImpl implements ImmutableSegment {
   @Override
   public ThreadSafeMutableRoaringBitmap getQueryableDocIds() {
     return _queryableDocIds;
+  }
+
+  @Nullable
+  @Override
+  public MutableRoaringBitmap getQueryableDocIdsSnapshot() {
+    if (_partitionUpsertMetadataManager == null) {
+      return null;
+    }
+    UpsertViewManager viewManager = _partitionUpsertMetadataManager.getUpsertViewManager();
+    return viewManager == null ? null : viewManager.getQueryableDocIdsSnapshot(this);
+  }
+
+  @Override
+  public boolean isUpsertConsistencyModeEnabled() {
+    return _partitionUpsertMetadataManager != null
+        && _partitionUpsertMetadataManager.getUpsertViewManager() != null;
   }
 
   @Override

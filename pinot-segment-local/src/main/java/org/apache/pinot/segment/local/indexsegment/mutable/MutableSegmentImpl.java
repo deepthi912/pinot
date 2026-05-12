@@ -72,6 +72,7 @@ import org.apache.pinot.segment.local.segment.virtualcolumn.VirtualColumnContext
 import org.apache.pinot.segment.local.segment.virtualcolumn.VirtualColumnProviderFactory;
 import org.apache.pinot.segment.local.upsert.ComparisonColumns;
 import org.apache.pinot.segment.local.upsert.PartitionUpsertMetadataManager;
+import org.apache.pinot.segment.local.upsert.UpsertViewManager;
 import org.apache.pinot.segment.local.upsert.RecordInfo;
 import org.apache.pinot.segment.local.upsert.UpsertContext;
 import org.apache.pinot.segment.local.utils.FixedIntArrayOffHeapIdMap;
@@ -1248,6 +1249,22 @@ public class MutableSegmentImpl implements MutableSegment {
   @Override
   public ThreadSafeMutableRoaringBitmap getQueryableDocIds() {
     return _queryableDocIds;
+  }
+
+  @Nullable
+  @Override
+  public MutableRoaringBitmap getQueryableDocIdsSnapshot() {
+    if (_partitionUpsertMetadataManager == null) {
+      return null;
+    }
+    UpsertViewManager viewManager = _partitionUpsertMetadataManager.getUpsertViewManager();
+    return viewManager == null ? null : viewManager.getQueryableDocIdsSnapshot(this);
+  }
+
+  @Override
+  public boolean isUpsertConsistencyModeEnabled() {
+    return _partitionUpsertMetadataManager != null
+        && _partitionUpsertMetadataManager.getUpsertViewManager() != null;
   }
 
   @Override
