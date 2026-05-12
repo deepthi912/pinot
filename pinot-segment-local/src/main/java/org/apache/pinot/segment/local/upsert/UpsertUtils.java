@@ -74,6 +74,9 @@ public class UpsertUtils {
     if (snapshot != null) {
       return snapshot.isEmpty();
     }
+    if (segment.isUpsertConsistencyModeEnabled()) {
+      return false;
+    }
     ThreadSafeMutableRoaringBitmap queryableDocIds = segment.getQueryableDocIds();
     if (queryableDocIds != null) {
       return queryableDocIds.isEmpty();

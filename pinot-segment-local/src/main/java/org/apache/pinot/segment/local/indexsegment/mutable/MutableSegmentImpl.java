@@ -1262,6 +1262,12 @@ public class MutableSegmentImpl implements MutableSegment {
   }
 
   @Override
+  public boolean isUpsertConsistencyModeEnabled() {
+    return _partitionUpsertMetadataManager != null
+        && _partitionUpsertMetadataManager.getUpsertViewManager() != null;
+  }
+
+  @Override
   public GenericRow getRecord(int docId, GenericRow reuse) {
     try (PinotSegmentRecordReader recordReader = new PinotSegmentRecordReader()) {
       recordReader.init(this);
