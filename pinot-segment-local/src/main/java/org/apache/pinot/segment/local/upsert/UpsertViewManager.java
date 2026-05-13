@@ -317,8 +317,7 @@ public class UpsertViewManager {
    */
   @Nullable
   public MutableRoaringBitmap getQueryableDocIdsSnapshot(IndexSegment segment) {
-    Map<IndexSegment, MutableRoaringBitmap> view = _segmentQueryableDocIdsMap;
-    return view.get(segment);
+    return _segmentQueryableDocIdsMap.get(segment);
   }
 
   @VisibleForTesting
