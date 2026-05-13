@@ -372,9 +372,21 @@ public class ImmutableSegmentImpl implements ImmutableSegment {
   }
 
   @Override
-  public boolean isUpsertConsistencyModeEnabled() {
-    return _partitionUpsertMetadataManager != null
-        && _partitionUpsertMetadataManager.getUpsertViewManager() != null;
+  public boolean hasNoQueryableDocs() {
+    MutableRoaringBitmap snapshot = getQueryableDocIdsSnapshot();
+    if (snapshot != null) {
+      return snapshot.isEmpty();
+    }
+    if (_partitionUpsertMetadataManager != null
+        && _partitionUpsertMetadataManager.getUpsertViewManager() != null) {
+      return false;
+    }
+    ThreadSafeMutableRoaringBitmap queryableDocIds = getQueryableDocIds();
+    if (queryableDocIds != null) {
+      return queryableDocIds.isEmpty();
+    }
+    ThreadSafeMutableRoaringBitmap validDocIds = getValidDocIds();
+    return validDocIds != null && validDocIds.isEmpty();
   }
 
   @Override

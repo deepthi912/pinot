@@ -37,7 +37,7 @@ public class UpsertUtilsTest {
     ThreadSafeMutableRoaringBitmap queryable = mock(ThreadSafeMutableRoaringBitmap.class);
     when(queryable.isEmpty()).thenReturn(true);
     when(segment.getQueryableDocIds()).thenReturn(queryable);
-    assertTrue(UpsertUtils.hasNoQueryableDocs(segment));
+    assertTrue(segment.hasNoQueryableDocs());
   }
 
   @Test
@@ -46,7 +46,7 @@ public class UpsertUtilsTest {
     ThreadSafeMutableRoaringBitmap queryable = mock(ThreadSafeMutableRoaringBitmap.class);
     when(queryable.isEmpty()).thenReturn(false);
     when(segment.getQueryableDocIds()).thenReturn(queryable);
-    assertFalse(UpsertUtils.hasNoQueryableDocs(segment));
+    assertFalse(segment.hasNoQueryableDocs());
   }
 
   @Test
@@ -56,7 +56,7 @@ public class UpsertUtilsTest {
     when(valid.isEmpty()).thenReturn(true);
     when(segment.getQueryableDocIds()).thenReturn(null);
     when(segment.getValidDocIds()).thenReturn(valid);
-    assertTrue(UpsertUtils.hasNoQueryableDocs(segment));
+    assertTrue(segment.hasNoQueryableDocs());
   }
 
   @Test
@@ -64,7 +64,7 @@ public class UpsertUtilsTest {
     IndexSegment segment = mock(IndexSegment.class);
     when(segment.getQueryableDocIds()).thenReturn(null);
     when(segment.getValidDocIds()).thenReturn(null);
-    assertFalse(UpsertUtils.hasNoQueryableDocs(segment));
+    assertFalse(segment.hasNoQueryableDocs());
   }
 
   // -------- Consistency-mode segments: snapshot is the source of truth. --------
@@ -78,7 +78,7 @@ public class UpsertUtilsTest {
     when(segment.getQueryableDocIds()).thenReturn(liveQueryable);
     when(segment.getQueryableDocIdsSnapshot()).thenReturn(new MutableRoaringBitmap());
     when(segment.isUpsertConsistencyModeEnabled()).thenReturn(true);
-    assertTrue(UpsertUtils.hasNoQueryableDocs(segment));
+    assertTrue(segment.hasNoQueryableDocs());
   }
 
   @Test
@@ -92,7 +92,7 @@ public class UpsertUtilsTest {
     snapshot.add(0);
     when(segment.getQueryableDocIdsSnapshot()).thenReturn(snapshot);
     when(segment.isUpsertConsistencyModeEnabled()).thenReturn(true);
-    assertFalse(UpsertUtils.hasNoQueryableDocs(segment));
+    assertFalse(segment.hasNoQueryableDocs());
   }
 
   @Test
@@ -106,6 +106,6 @@ public class UpsertUtilsTest {
     when(segment.getQueryableDocIds()).thenReturn(liveQueryable);
     when(segment.getQueryableDocIdsSnapshot()).thenReturn(null);
     when(segment.isUpsertConsistencyModeEnabled()).thenReturn(true);
-    assertFalse(UpsertUtils.hasNoQueryableDocs(segment));
+    assertFalse(segment.hasNoQueryableDocs());
   }
 }

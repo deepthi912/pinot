@@ -121,14 +121,18 @@ public interface IndexSegment {
   }
 
   /**
-   * Returns {@code true} when this segment belongs to an upsert table whose consistency mode is
-   * {@code SYNC} or {@code SNAPSHOT}.
-   *
-   * <p>When this returns {@code true}, callers must not short-circuit decisions on the segment's live
-   * {@link #getValidDocIds()} / {@link #getQueryableDocIds()} bitmaps: the live bitmaps can diverge from
-   * the per-query snapshot maintained by the upsert view manager.
+   * Returns whether the segment has no queryable documents. Order of checks:
+   * <ol>
+   *   <li>If the segment exposes a queryable-doc-ids snapshot via {@link IndexSegment#getQueryableDocIdsSnapshot()}
+   *       (consistency-mode upsert tables), trust the snapshot — it matches the view the upcoming query will scan.</li>
+   *   <li>If the segment is in a consistency-mode upsert table but the snapshot is not yet populated for it
+   *       (first refresh hasn't run or this segment was just tracked), be conservative and report
+   *       {@code false} — the live bitmaps can diverge from the snapshot view.</li>
+   *   <li>Otherwise (non-consistency tables, or non-upsert tables), fall back to the segment's live
+   *       queryable bitmap, and to {@code validDocIds} when no delete-record column is configured.</li>
+   * </ol>
    */
-  default boolean isUpsertConsistencyModeEnabled() {
+  default boolean hasNoQueryableDocs() {
     return false;
   }
 

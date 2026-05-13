@@ -157,6 +157,6 @@ public class SegmentPrunerService {
       return true;
     }
     // Check if the segment has 0 queryable docIds while skipUpsert=false
-    return !skipUpsert && UpsertUtils.hasNoQueryableDocs(segment);
+    return !skipUpsert && segment.hasNoQueryableDocs();
   }
 }
