@@ -108,22 +108,9 @@ public interface IndexSegment {
   ThreadSafeMutableRoaringBitmap getQueryableDocIds();
 
   /**
-   * Returns the queryable doc-id bitmap from the upsert snapshot view if the table has consistency mode
-   * (SYNC or SNAPSHOT) enabled and this segment is included in the latest refresh; otherwise returns {@code null}.
-   *
-   * <p>Callers that need a consistent view across segments (e.g. query-time empty-segment pruning) should
-   * prefer this over {@link #getQueryableDocIds()}, which is the segment's live bitmap and can drift from the
-   * per-query snapshot between refreshes.
-   */
-  @Nullable
-  default MutableRoaringBitmap getQueryableDocIdsSnapshot() {
-    return null;
-  }
-
-  /**
    * Returns whether the segment has no queryable documents. Order of checks:
    * <ol>
-   *   <li>If the segment exposes a queryable-doc-ids snapshot via {@link IndexSegment#getQueryableDocIdsSnapshot()}
+   *   <li>If the segment exposes a queryable-doc-ids snapshot for
    *       (consistency-mode upsert tables), trust the snapshot — it matches the view the upcoming query will scan.</li>
    *   <li>If the segment is in a consistency-mode upsert table but the snapshot is not yet populated for it
    *       (first refresh hasn't run or this segment was just tracked), be conservative and report

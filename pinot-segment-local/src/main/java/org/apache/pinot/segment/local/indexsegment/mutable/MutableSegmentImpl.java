@@ -1251,23 +1251,17 @@ public class MutableSegmentImpl implements MutableSegment {
     return _queryableDocIds;
   }
 
-  @Nullable
-  @Override
-  public MutableRoaringBitmap getQueryableDocIdsSnapshot() {
-    if (_partitionUpsertMetadataManager == null) {
-      return null;
-    }
-    UpsertViewManager viewManager = _partitionUpsertMetadataManager.getUpsertViewManager();
-    return viewManager == null ? null : viewManager.getQueryableDocIdsSnapshot(this);
-  }
-
   @Override
   public boolean hasNoQueryableDocs() {
-    MutableRoaringBitmap snapshot = getQueryableDocIdsSnapshot();
-    if (snapshot != null) {
-      return snapshot.isEmpty();
+    if (_partitionUpsertMetadataManager == null) {
+      return false;
     }
-    if (_partitionUpsertMetadataManager != null && _partitionUpsertMetadataManager.getUpsertViewManager() != null) {
+    UpsertViewManager viewManager = _partitionUpsertMetadataManager.getUpsertViewManager();
+    if (viewManager != null) {
+      MutableRoaringBitmap queryableDocIdsSnapshot = viewManager.getQueryableDocIdsSnapshot(this);
+      if (queryableDocIdsSnapshot != null) {
+        return queryableDocIdsSnapshot.isEmpty();
+      }
       return false;
     }
     ThreadSafeMutableRoaringBitmap queryableDocIds = getQueryableDocIds();
