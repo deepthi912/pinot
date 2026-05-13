@@ -76,8 +76,6 @@ public class UpsertUtilsTest {
     ThreadSafeMutableRoaringBitmap liveQueryable = mock(ThreadSafeMutableRoaringBitmap.class);
     when(liveQueryable.isEmpty()).thenReturn(false);
     when(segment.getQueryableDocIds()).thenReturn(liveQueryable);
-    when(segment.getQueryableDocIdsSnapshot()).thenReturn(new MutableRoaringBitmap());
-    when(segment.isUpsertConsistencyModeEnabled()).thenReturn(true);
     assertTrue(segment.hasNoQueryableDocs());
   }
 
@@ -90,8 +88,6 @@ public class UpsertUtilsTest {
     when(segment.getQueryableDocIds()).thenReturn(liveQueryable);
     MutableRoaringBitmap snapshot = new MutableRoaringBitmap();
     snapshot.add(0);
-    when(segment.getQueryableDocIdsSnapshot()).thenReturn(snapshot);
-    when(segment.isUpsertConsistencyModeEnabled()).thenReturn(true);
     assertFalse(segment.hasNoQueryableDocs());
   }
 
@@ -104,8 +100,6 @@ public class UpsertUtilsTest {
     ThreadSafeMutableRoaringBitmap liveQueryable = mock(ThreadSafeMutableRoaringBitmap.class);
     when(liveQueryable.isEmpty()).thenReturn(true);
     when(segment.getQueryableDocIds()).thenReturn(liveQueryable);
-    when(segment.getQueryableDocIdsSnapshot()).thenReturn(null);
-    when(segment.isUpsertConsistencyModeEnabled()).thenReturn(true);
     assertFalse(segment.hasNoQueryableDocs());
   }
 }
