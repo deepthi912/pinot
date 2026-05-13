@@ -159,7 +159,7 @@
     <zkclient.version>0.11</zkclient.version>
     <jackson.version>2.21.3</jackson.version>
     <zookeeper.version>3.9.5</zookeeper.version>
-    <async-http-client.version>3.0.9</async-http-client.version>
+    <async-http-client.version>3.0.10</async-http-client.version>
     <jersey.version>2.48</jersey.version>
     <hk2.version>2.6.1</hk2.version>
     <swagger.version>1.6.16</swagger.version>
@@ -181,7 +181,7 @@
     <lz4-java.version>1.11.0</lz4-java.version>
     <libthrift.verion>0.23.0</libthrift.verion>
     <log4j.version>2.26.0</log4j.version>
-    <slf4j.version>2.0.17</slf4j.version>
+    <slf4j.version>2.0.18</slf4j.version>
     <netty.version>4.1.133.Final</netty.version>
     <reactivestreams.version>1.0.4</reactivestreams.version>
     <jts.version>1.20.0</jts.version>
@@ -266,7 +266,7 @@
     <!-- Google Libraries -->
     <protobuf.version>4.34.1</protobuf.version>
     <grpc.version>1.81.0</grpc.version>
-    <google.cloud.libraries.version>26.81.0</google.cloud.libraries.version>
+    <google.cloud.libraries.version>26.82.0</google.cloud.libraries.version>
     <opentelemetry.gcp.resources.version>1.56.0-alpha</opentelemetry.gcp.resources.version>
     <google.auto-service.version>1.1.1</google.auto-service.version>
     <google.re2j.version>1.8</google.re2j.version>
