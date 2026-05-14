@@ -29,7 +29,6 @@ import org.apache.pinot.segment.spi.index.startree.StarTreeV2;
 import org.apache.pinot.spi.annotations.InterfaceAudience;
 import org.apache.pinot.spi.data.Schema;
 import org.apache.pinot.spi.data.readers.GenericRow;
-import org.roaringbitmap.buffer.MutableRoaringBitmap;
 
 
 @InterfaceAudience.Private
