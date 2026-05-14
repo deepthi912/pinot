@@ -142,7 +142,7 @@ public interface PartitionUpsertMetadataManager extends Closeable {
 
   /**
    * Returns the upsert view manager that maintains the per-segment queryable-doc-id snapshot for consistency-mode
-   * upsert tables, or {@code null} when consistency mode is not enabled for this partition.
+   * upsert tables, or null when consistency mode is not enabled for this partition.
    */
   @Nullable
   UpsertViewManager getUpsertViewManager();
