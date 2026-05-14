@@ -307,14 +307,8 @@ public class UpsertViewManager {
     return _segmentQueryableDocIdsMap;
   }
 
-  /**
-   * Returns the queryable doc-id snapshot for the given segment from the most recent refresh, or
-   * {@code null} if no refresh has happened yet or the segment is not in the current view.
-   *
-   * <p>Lock-free: reads the volatile map reference and does a single lookup. Writers replace the map
-   * reference atomically under {@link #_upsertViewLock} (write lock), so the returned bitmap is the
-   * frozen snapshot of that refresh.
-   */
+  // Returns the queryable doc-id snapshot for the given segment from the most recent refresh, or
+  // null if no refresh has happened yet or the segment is not in the current view.
   @Nullable
   public MutableRoaringBitmap getQueryableDocIdsSnapshot(IndexSegment segment) {
     Map<IndexSegment, MutableRoaringBitmap> view = _segmentQueryableDocIdsMap;
