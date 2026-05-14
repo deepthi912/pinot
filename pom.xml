@@ -192,7 +192,7 @@
     <audienceannotations.version>0.15.1</audienceannotations.version>
     <clp-ffi.version>0.4.7</clp-ffi.version>
     <stax2-api.version>4.3.0</stax2-api.version>
-    <aws.sdk.version>2.44.4</aws.sdk.version>
+    <aws.sdk.version>2.44.5</aws.sdk.version>
     <azure.sdk.version>1.3.6</azure.sdk.version>
     <azure.msal4j.version>1.24.1</azure.msal4j.version>
     <joda-time.version>2.14.2</joda-time.version>
@@ -234,7 +234,7 @@
     <commons-compress.version>1.28.0</commons-compress.version>
     <commons-math3.version>3.6.1</commons-math3.version>
     <commons-csv.version>1.14.1</commons-csv.version>
-    <commons-configuration2.version>2.14.0</commons-configuration2.version>
+    <commons-configuration2.version>2.15.0</commons-configuration2.version>
     <commons-beanutils.version>1.11.0</commons-beanutils.version>
     <commons-io.version>2.22.0</commons-io.version>
     <commons-codec.version>1.22.0</commons-codec.version>
