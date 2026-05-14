@@ -107,38 +107,8 @@ public interface IndexSegment {
   @Nullable
   ThreadSafeMutableRoaringBitmap getQueryableDocIds();
 
-  /// Returns the queryable doc-ids snapshot captured by the upsert view manager for this segment,
-  /// when consistency-mode is enabled. `null` when consistency mode is off or the first refresh
-  /// hasn't yet populated this segment's view.
-  @Nullable
-  default MutableRoaringBitmap getQueryableDocIdsSnapshot() {
-    return null;
-  }
-
-  /// Whether this segment belongs to a consistency-mode upsert table.
-  default boolean isUpsertConsistencyModeEnabled() {
-    return false;
-  }
-
-  // Returns whether the segment has no queryable documents. Order of checks:
-  // 1. If the segment is in a consistency-mode upsert table and a queryable-doc-ids snapshot has
-  //    been published for it, trust the snapshot — it matches the view the upcoming query will scan.
-  // 2. If the segment is in a consistency-mode upsert table but the snapshot is not yet
-  //   populated for it (first refresh hasn't run or this segment was just tracked), be
-  //   conservative and report `false` — the live bitmaps can diverge from the snapshot view.
-  // 3. Otherwise (non-consistency tables, or non-upsert tables), fall back to the segment's live
-  // queryable bitmap, and to `validDocIds` when no delete-record column is configured.
   default boolean hasNoQueryableDocs() {
-    if (isUpsertConsistencyModeEnabled()) {
-      MutableRoaringBitmap snapshot = getQueryableDocIdsSnapshot();
-      return snapshot != null && snapshot.isEmpty();
-    }
-    ThreadSafeMutableRoaringBitmap queryableDocIds = getQueryableDocIds();
-    if (queryableDocIds != null) {
-      return queryableDocIds.isEmpty();
-    }
-    ThreadSafeMutableRoaringBitmap validDocIds = getValidDocIds();
-    return validDocIds != null && validDocIds.isEmpty();
+    return false;
   }
 
   /**
