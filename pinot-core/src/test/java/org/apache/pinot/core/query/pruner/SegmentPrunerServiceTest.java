@@ -231,22 +231,12 @@ public class SegmentPrunerServiceTest {
     return indexSegment;
   }
 
-  /**
-   * Builds a real {@link ImmutableSegmentImpl} with upsert-style doc id bitmaps wired through
-   * {@code enableUpsert(...)}. Using the real impl (rather than {@code mock(IndexSegment.class)})
-   * is required because {@code SegmentPrunerService} relies on {@code IndexSegment#hasNoQueryableDocs()},
-   * whose body inspects the live queryable/valid bitmaps — a Mockito mock would return the
-   * Mockito default ({@code false}) regardless of the bitmaps. The pattern mirrors
-   * {@code BasePartitionUpsertMetadataManagerTest#createImmutableSegment}.
-   */
   private IndexSegment mockUpsertIndexSegment(int totalDocs,
       ThreadSafeMutableRoaringBitmap validDocIds, ThreadSafeMutableRoaringBitmap queryableDocIds) {
     SegmentMetadataImpl segmentMetadata = mock(SegmentMetadataImpl.class);
     when(segmentMetadata.getTotalDocs()).thenReturn(totalDocs);
     ImmutableSegmentImpl segment = new ImmutableSegmentImpl(
         mock(SegmentDirectory.class), segmentMetadata, new HashMap<>(), null);
-    // Non-consistency-mode upsert: viewManager null so hasNoQueryableDocs falls through to the
-    // live queryable / valid bitmaps the test wires below.
     PartitionUpsertMetadataManager manager = mock(PartitionUpsertMetadataManager.class);
     when(manager.getUpsertViewManager()).thenReturn(null);
     segment.enableUpsert(manager, validDocIds, queryableDocIds);
