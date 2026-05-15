@@ -22,14 +22,19 @@ package org.apache.pinot.core.query.pruner;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import org.apache.pinot.core.query.config.SegmentPrunerConfig;
 import org.apache.pinot.core.query.request.context.QueryContext;
 import org.apache.pinot.core.query.request.context.utils.QueryContextConverterUtils;
+import org.apache.pinot.segment.local.indexsegment.immutable.ImmutableSegmentImpl;
+import org.apache.pinot.segment.local.upsert.PartitionUpsertMetadataManager;
 import org.apache.pinot.segment.spi.IndexSegment;
 import org.apache.pinot.segment.spi.SegmentMetadata;
+import org.apache.pinot.segment.spi.index.metadata.SegmentMetadataImpl;
 import org.apache.pinot.segment.spi.index.mutable.ThreadSafeMutableRoaringBitmap;
+import org.apache.pinot.segment.spi.store.SegmentDirectory;
 import org.apache.pinot.spi.env.PinotConfiguration;
 import org.apache.pinot.spi.utils.CommonConstants.Server;
 import org.testng.Assert;
@@ -227,17 +232,24 @@ public class SegmentPrunerServiceTest {
   }
 
   /**
-   * Segment with upsert-style doc id bitmaps (valid and optional queryable).
+   * Builds a real {@link ImmutableSegmentImpl} with upsert-style doc id bitmaps wired through
+   * {@code enableUpsert(...)}. Using the real impl (rather than {@code mock(IndexSegment.class)})
+   * is required because {@code SegmentPrunerService} relies on {@code IndexSegment#hasNoQueryableDocs()},
+   * whose body inspects the live queryable/valid bitmaps — a Mockito mock would return the
+   * Mockito default ({@code false}) regardless of the bitmaps. The pattern mirrors
+   * {@code BasePartitionUpsertMetadataManagerTest#createImmutableSegment}.
    */
   private IndexSegment mockUpsertIndexSegment(int totalDocs,
       ThreadSafeMutableRoaringBitmap validDocIds, ThreadSafeMutableRoaringBitmap queryableDocIds) {
-    IndexSegment indexSegment = mock(IndexSegment.class);
-    when(indexSegment.getColumnNames()).thenReturn(new HashSet<>(Arrays.asList("col1")));
-    SegmentMetadata segmentMetadata = mock(SegmentMetadata.class);
+    SegmentMetadataImpl segmentMetadata = mock(SegmentMetadataImpl.class);
     when(segmentMetadata.getTotalDocs()).thenReturn(totalDocs);
-    when(indexSegment.getSegmentMetadata()).thenReturn(segmentMetadata);
-    when(indexSegment.getValidDocIds()).thenReturn(validDocIds);
-    when(indexSegment.getQueryableDocIds()).thenReturn(queryableDocIds);
-    return indexSegment;
+    ImmutableSegmentImpl segment = new ImmutableSegmentImpl(
+        mock(SegmentDirectory.class), segmentMetadata, new HashMap<>(), null);
+    // Non-consistency-mode upsert: viewManager null so hasNoQueryableDocs falls through to the
+    // live queryable / valid bitmaps the test wires below.
+    PartitionUpsertMetadataManager manager = mock(PartitionUpsertMetadataManager.class);
+    when(manager.getUpsertViewManager()).thenReturn(null);
+    segment.enableUpsert(manager, validDocIds, queryableDocIds);
+    return segment;
   }
 }
